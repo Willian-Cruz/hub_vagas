@@ -1,0 +1,5 @@
+JOB_CARD=".vaga odd"
+JOB_TITLE=".cargo"
+COMPANY=".emprVaga"
+LOCATION=".vaga-local"
+DESCRIPTION=".detalhes"

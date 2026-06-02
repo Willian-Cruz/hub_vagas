@@ -10,5 +10,5 @@ class Job(base):
     empresa=Column(String)
     localizacao=Column(String)
     descricao=Column(Text)
-    link=Column(Text)
+    link=Column(Text, unique=True, nullable=False)
     origem=Column(String)

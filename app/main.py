@@ -3,11 +3,13 @@ from database.models import base
 from config.settings import *
 from scrapers.vagas_scraper import VagasScraper
 from services.job_service import JobService
+from services.colletor_service import CollectorService
 
-base.metadata.create_all(engine)
-print("Banco criado com sucesso!")
+#base.metadata.create_all(engine)
+#print("Banco criado com sucesso!")
 
-vagas = VagasScraper.coletar()
+
+vagas = (CollectorService.coletar_todas_vagas())
 
 for vaga in vagas:
     JobService.salvar(vaga)

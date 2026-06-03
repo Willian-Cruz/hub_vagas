@@ -1,2 +1,95 @@
+# =========================
+# Ambiente Virtual
+# =========================
+venv/
+.venv/
+env/
+
+# =========================
+# Variáveis de Ambiente
+# =========================
 .env
-./venv
+.env.*
+
+# Permite versionar o exemplo
+!.env.example
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# Distribuição / Build
+# =========================
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# Banco Local (caso use SQLite)
+# =========================
+*.db
+*.sqlite3
+
+# =========================
+# Jupyter Notebook
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# VS Code
+# =========================
+.vscode/
+
+# =========================
+# PyCharm
+# =========================
+.idea/
+
+# =========================
+# Sistema Operacional
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Arquivos temporários
+# =========================
+*.tmp
+*.temp
+
+# =========================
+# Coverage e Testes
+# =========================
+.coverage
+htmlcov/
+.pytest_cache/
+
+# =========================
+# Arquivos de saída
+# =========================
+data/raw/
+data/exports/
+
+# =========================
+# Playwright
+# =========================
+playwright-report/
+test-results/
+
+# =========================
+# Arquivos locais do projeto
+# =========================
+*.bak
+*.swp

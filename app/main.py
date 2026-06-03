@@ -1,17 +1,21 @@
 from database.connection import engine
 from database.models import base
-from config.settings import *
-from scrapers.vagas_scraper import VagasScraper
-from services.job_service import JobService
-from services.colletor_service import CollectorService
+from database.job_model import Job
+from database.tech_model import Technology
+from database.job_tech_model import job_technologies
+from services.collector_service import CollectorService
+from repositories.job_repository import JobRepository
 
-#base.metadata.create_all(engine)
-#print("Banco criado com sucesso!")
+base.metadata.create_all(bind=engine)
 
+print("Banco criado com sucesso!")
 
-vagas = (CollectorService.coletar_todas_vagas())
+vagas = CollectorService.coletar_todas_vagas()
+
+print(f"\nTotal coletado: " f"{len(vagas)} vagas\n")
 
 for vaga in vagas:
-    JobService.salvar(vaga)
 
-print(f"{len(vagas)} vagas salvas!")
+    JobRepository.salvar(vaga)
+
+print("\nProcessamento finalizado.")

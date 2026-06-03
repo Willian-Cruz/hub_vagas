@@ -1,9 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
 from schemas.job_schema import JobSchema
+from scrapers.base_scraper import BaseScraper
 
 
-class VagasScraper:
+class VagasScraper(BaseScraper):
 
     @staticmethod
     def coletar():
@@ -27,60 +28,48 @@ class VagasScraper:
         # PEGA TODAS AS VAGAS
         cards = soup.find_all("li", class_="vaga")
 
-        print(f"Total vagas encontradas: {len(cards)}")
+        # print(f"Vagas.com: {len(cards)} vagas encontradas.")
 
         vagas = []
 
         for card in cards:
 
             try:
-
-                titulo = card.find("a", class_="link-detalhes-vaga").get_text(strip=True)
+                titulo = card.find("a", class_="link-detalhes-vaga").get_text(" ", strip=True)
 
             except:
-
                 titulo = "Não informado"
 
             try:
-
                 empresa = card.find("span", class_="emprVaga").get_text(strip=True)
 
             except:
-
                 empresa = "Não informado"
 
             try:
-
                 senioridade = card.find("span", class_="nivelVaga").get_text(strip=True)
 
             except:
-
                 senioridade = "Não informado"
 
             try:
-
                 localizacao = card.find("div", class_="vaga-local").get_text(separator=" ", strip=True)
                 localizacao = localizacao.split("A empresa aceita")[0].strip()
 
             except:
-
                 localizacao = "Não informado"
 
             try:
-
                 descricao = card.find("div", class_="detalhes").get_text(separator=" ", strip=True)
 
             except:
-
                 descricao = "Não informado"
 
             try:
-
                 link = card.find("a", class_="link-detalhes-vaga")["href"]
                 link = "https://www.vagas.com.br" + link
 
             except:
-
                 link = "Não informado"
 
             print(f"""
@@ -100,7 +89,7 @@ class VagasScraper:
                 descricao=descricao,
                 link=link,
                 origem="Vagas.com",
-            )
+                )
 
             vagas.append(vaga)
 

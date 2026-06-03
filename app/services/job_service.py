@@ -1,5 +1,5 @@
 from database.connection import Sessionlocal
-from database.models import Job
+from database.job_model import Job
 
 class JobService:
 

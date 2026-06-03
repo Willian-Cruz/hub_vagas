@@ -158,7 +158,7 @@ Exemplos:
 Clone o repositório:
 
 ```bash
-git clone https://github.com/SEU_USUARIO/hub_vagas.git
+git clone https://github.com/Willian-Cruz/hub_vagas.git
 ```
 
 Entre na pasta:

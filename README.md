@@ -278,3 +278,7 @@ Processamento finalizado.
 Willian
 
 Projeto desenvolvido para fins de estudo, prática de Engenharia de Dados e construção de portfólio profissional.
+
+## 📄 Licença
+
+Este projeto está licenciado sob a licença MIT. Consulte o arquivo LICENSE para mais informações.

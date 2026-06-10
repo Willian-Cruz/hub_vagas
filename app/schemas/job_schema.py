@@ -9,5 +9,6 @@ class JobSchema(BaseModel):
     senioridade: Optional[str] = "Não informado"
     localizacao: Optional[str] = "Não informado"
     descricao: Optional[str] = "Não informado"
+    salario: Optional[str] = "Não informado"  
     link: str
     origem: str

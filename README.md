@@ -28,6 +28,7 @@ Portais de Vagas
        │
        ▼
  Transformação
+ (Normalização + Extração)
        │
        ▼
  PostgreSQL
@@ -44,19 +45,39 @@ Portais de Vagas
 hub_vagas/
 │
 ├── app/
-│   ├── core/
+│   ├── config/
+│   │   └── settings.py
+│   ├── constants/
+│   │   └── selectors.py
 │   ├── database/
-│   ├── models/
+│   │   ├── connection.py
+│   │   ├── models.py
+│   │   ├── job_model.py
+│   │   ├── tech_model.py
+│   │   └── job_tech_model.py
 │   ├── repositories/
+│   │   ├── job_repository.py
+│   │   └── tech_repository.py
 │   ├── schemas/
+│   │   └── job_schema.py
 │   ├── scrapers/
+│   │   ├── base_scraper.py
+│   │   ├── vagas_scraper.py
+│   │   └── infojobs_scraper.py
 │   ├── services/
+│   │   ├── collector_service.py
+│   │   ├── job_service.py
+│   │   ├── normalize_service.py
+│   │   ├── salary_service.py
+│   │   └── tech_service.py
 │   ├── utils/
+│   │   └── logger.py
 │   └── main.py
 │
-├── data/
-├── logs/
 ├── tests/
+│   ├── __init__.py
+│   ├── test_normalize_service.py
+│   └── test_salary_service.py
 │
 ├── .env.example
 ├── .gitignore
@@ -91,6 +112,10 @@ hub_vagas/
 
 * Pandas
 
+### Testes
+
+* Pytest
+
 ### Versionamento
 
 * Git
@@ -117,17 +142,18 @@ hub_vagas/
 
 ## 📊 Dados Coletados
 
-Atualmente o sistema coleta:
+Atualmente o sistema coleta e normaliza:
 
-| Campo       | Descrição                 |
-| ----------- | ------------------------- |
-| Título      | Nome da vaga              |
-| Empresa     | Empresa contratante       |
-| Senioridade | Júnior, Pleno, Sênior etc |
-| Localização | Cidade/Estado             |
-| Descrição   | Resumo da vaga            |
-| Link        | URL da vaga               |
-| Origem      | Portal de recrutamento    |
+| Campo       | Descrição                              |
+| ----------- | -------------------------------------- |
+| Título      | Nome da vaga                           |
+| Empresa     | Empresa contratante                    |
+| Senioridade | Padronizado: Júnior, Pleno, Sênior etc |
+| Localização | Padronizado: Cidade - UF / Remoto      |
+| Salário     | Extraído da descrição quando disponível|
+| Descrição   | Resumo da vaga                         |
+| Link        | URL da vaga                            |
+| Origem      | Portal de recrutamento                 |
 
 ---
 
@@ -200,7 +226,11 @@ pip install -r requirements.txt
 Crie um arquivo `.env` baseado no `.env.example`:
 
 ```env
-DATABASE_URL=postgresql://usuario:senha@localhost:5432/job_market
+DB_USER=usuario
+DB_PASSWORD=senha
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=job_market
 ```
 
 ---
@@ -221,30 +251,76 @@ InfoJobsScraper: 20 vagas
 
 Total coletado: 60 vagas
 
+Salva: Engenheiro de Dados | Senior: Pleno | Local: São Paulo - SP | Salário: Não informado
+
 Processamento finalizado.
 ```
 
 ---
 
-## 📈 Próximos Passos
+## 🧪 Testes
 
-### Sprint 5
+Execute os testes a partir da raiz do projeto:
 
-* Normalização de senioridade
-* Normalização de localização
-* Extração de salários
+```bash
+pytest tests/ -v
+```
 
-### Sprint 6
+Saída esperada:
+
+```text
+tests/test_normalize_service.py::TestNormalizarSenioridade::test_junior_variantes PASSED
+tests/test_normalize_service.py::TestNormalizarSenioridade::test_pleno_variantes  PASSED
+tests/test_normalize_service.py::TestNormalizarLocalizacao::test_remoto           PASSED
+tests/test_salary_service.py::TestExtrairSalario::test_faixa_com_rs               PASSED
+...
+20 passed in 0.03s
+```
+
+---
+
+## 📈 Sprints
+
+### ✅ Sprint 1 — Estrutura inicial
+
+* Conexão com PostgreSQL
+* Estrutura de pastas e arquivos
+* Modelo de dados base
+
+### ✅ Sprint 2 — Persistência
+
+* Gravação de vagas no banco
+* Validação com Pydantic
+
+### ✅ Sprint 3 — Scrapers
+
+* Scraper Vagas.com
+* Scraper InfoJobs
+* Coleta simultânea via CollectorService
+
+### ✅ Sprint 4 — Tecnologias
+
+* Extração automática de tecnologias nas descrições
+* Tabela `technologies` e relação many-to-many com `jobs`
+
+### ✅ Sprint 5 — Normalização e Salários
+
+* Normalização de senioridade (Júnior, Pleno, Sênior, Estágio etc.)
+* Normalização de localização (Cidade - UF, Remoto, Híbrido)
+* Extração de salários via regex na descrição
+* Testes unitários com Pytest (20 testes)
+
+### ⏳ Sprint 6
 
 * Dashboard analítico
 * Indicadores de mercado
 
-### Sprint 7
+### ⏳ Sprint 7
 
 * Agendamento automático
 * Pipeline diário
 
-### Sprint 8
+### ⏳ Sprint 8
 
 * Deploy em nuvem
 * PostgreSQL gerenciado
@@ -264,20 +340,27 @@ Processamento finalizado.
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)
-![Status](https://img.shields.io/badge/Status-Em%20Desenvolvimento-green)
+![Pytest](https://img.shields.io/badge/Testes-Pytest-green)
+![Status](https://img.shields.io/badge/Status-Em%20Desenvolvimento-yellow)
 
 ## Estatísticas Atuais
 
-- Vagas coletadas: 60+
-- Portais integrados: 2
-- Tecnologias monitoradas: 20+
-- Banco de dados: PostgreSQL
+* Vagas coletadas: 60+
+* Portais integrados: 2
+* Tecnologias monitoradas: 20+
+* Testes automatizados: 20
+* Banco de dados: PostgreSQL
+
+---
 
 ## 👨‍💻 Autor
 
 Willian
 
 Projeto desenvolvido para fins de estudo, prática de Engenharia de Dados e construção de portfólio profissional.
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Willian%20Cruz-blue?logo=linkedin)](https://linkedin.com/in/williandacruz/)
+[![GitHub](https://img.shields.io/badge/GitHub-Willian--Cruz-black?logo=github)](https://github.com/Willian-Cruz)
 
 ## 📄 Licença
 

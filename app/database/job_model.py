@@ -13,6 +13,7 @@ class Job(base):
     senioridade = Column(String)
     localizacao = Column(String)
     descricao = Column(Text)
+    salario = Column(String)
     link = Column(String, unique=True, nullable=False)
     origem = Column(String)
 

@@ -65,17 +65,25 @@ hub_vagas/
 │   │   ├── vagas_scraper.py
 │   │   └── infojobs_scraper.py
 │   ├── services/
+│   │   ├── analytics_service.py
 │   │   ├── collector_service.py
+│   │   ├── dashboard_service.py
 │   │   ├── job_service.py
 │   │   ├── normalize_service.py
 │   │   ├── salary_service.py
 │   │   └── tech_service.py
 │   ├── utils/
 │   │   └── logger.py
+│   ├── generate_dashboard.py
 │   └── main.py
+│
+├── dashboard/
+│   └── dashboard.html
 │
 ├── tests/
 │   ├── __init__.py
+│   ├── conftest.py
+│   ├── test_analytics_service.py
 │   ├── test_normalize_service.py
 │   └── test_salary_service.py
 │
@@ -111,6 +119,10 @@ hub_vagas/
 ### Manipulação de Dados
 
 * Pandas
+
+### Dashboard
+
+* Chart.js (via CDN)
 
 ### Testes
 
@@ -258,6 +270,28 @@ Processamento finalizado.
 
 ---
 
+## 📊 Gerando o Dashboard
+
+Com o banco populado, rode:
+
+```bash
+python app/generate_dashboard.py
+```
+
+Isso gera o arquivo `dashboard/dashboard.html`. Abra-o direto no navegador — sem servidor necessário.
+
+O dashboard exibe:
+
+* KPIs gerais: total de vagas, empresas, tecnologias e portais
+* Vagas por senioridade
+* Modalidade de trabalho (Remoto, Híbrido, Presencial)
+* Top 15 tecnologias mais demandadas
+* Top 10 localizações
+* Vagas por portal de origem
+* Transparência salarial
+
+---
+
 ## 🧪 Testes
 
 Execute os testes a partir da raiz do projeto:
@@ -269,12 +303,13 @@ pytest tests/ -v
 Saída esperada:
 
 ```text
+tests/test_analytics_service.py::TestVagasPorSenioridade::test_retorna_dataframe PASSED
+tests/test_analytics_service.py::TestResumoGeral::test_valores_corretos          PASSED
 tests/test_normalize_service.py::TestNormalizarSenioridade::test_junior_variantes PASSED
-tests/test_normalize_service.py::TestNormalizarSenioridade::test_pleno_variantes  PASSED
 tests/test_normalize_service.py::TestNormalizarLocalizacao::test_remoto           PASSED
 tests/test_salary_service.py::TestExtrairSalario::test_faixa_com_rs               PASSED
 ...
-20 passed in 0.03s
+43 passed in 0.52s
 ```
 
 ---
@@ -310,10 +345,13 @@ tests/test_salary_service.py::TestExtrairSalario::test_faixa_com_rs             
 * Extração de salários via regex na descrição
 * Testes unitários com Pytest (20 testes)
 
-### ⏳ Sprint 6
+### ✅ Sprint 6 — Dashboard Analítico
 
-* Dashboard analítico
-* Indicadores de mercado
+* `AnalyticsService`: 6 consultas SQL retornando DataFrames (senioridade, localização, modalidade, tecnologias, origem, salários)
+* `DashboardService`: geração de HTML estático com Chart.js
+* KPIs no cabeçalho: vagas, empresas, tecnologias, portais
+* `conftest.py`: mock global do banco para testes sem PostgreSQL
+* Testes unitários com mock (23 testes, total acumulado: 43)
 
 ### ⏳ Sprint 7
 
@@ -340,6 +378,7 @@ tests/test_salary_service.py::TestExtrairSalario::test_faixa_com_rs             
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)
+![Chart.js](https://img.shields.io/badge/Dashboard-Chart.js-orange)
 ![Pytest](https://img.shields.io/badge/Testes-Pytest-green)
 ![Status](https://img.shields.io/badge/Status-Em%20Desenvolvimento-yellow)
 
@@ -348,8 +387,9 @@ tests/test_salary_service.py::TestExtrairSalario::test_faixa_com_rs             
 * Vagas coletadas: 60+
 * Portais integrados: 2
 * Tecnologias monitoradas: 20+
-* Testes automatizados: 20
+* Testes automatizados: 43
 * Banco de dados: PostgreSQL
+* Dashboard: HTML estático com Chart.js
 
 ---
 

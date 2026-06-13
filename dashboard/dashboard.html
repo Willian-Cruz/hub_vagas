@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hub Vagas — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #0f172a;
+    --surface:  #1e293b;
+    --border:   #334155;
+    --text:     #e2e8f0;
+    --muted:    #94a3b8;
+    --accent:   #4361ee;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+  }
+  header h1 { font-size: 1.6rem; color: #fff; }
+  header h1 span { color: var(--accent); }
+  header p  { font-size: 0.8rem; color: var(--muted); }
+ 
+  /* ── KPI cards ── */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .kpi .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+  .kpi .label { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+ 
+  /* ── Grid de gráficos ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card.wide { grid-column: span 2; }
+  .card h2 {
+    font-size: 0.95rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-bottom: 16px;
+  }
+  .chart-wrap { position: relative; height: 280px; }
+  .chart-wrap.tall { height: 340px; }
+ 
+  @media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr; }
+    .card.wide { grid-column: span 1; }
+  }
+</style>
+</head>
+<body>
+ 
+<header>
+  <div>
+    <h1>Hub Vagas <span>Analytics</span></h1>
+    <p>Mercado de trabalho em Dados &amp; Tecnologia — Brasil</p>
+  </div>
+  <p>Atualizado em 12/06/2026 18:57</p>
+</header>
+ 
+<!-- KPIs -->
+<div class="kpis">
+  <div class="kpi">
+    <div class="value">102</div>
+    <div class="label">Vagas coletadas</div>
+  </div>
+  <div class="kpi">
+    <div class="value">72</div>
+    <div class="label">Empresas únicas</div>
+  </div>
+  <div class="kpi">
+    <div class="value">7</div>
+    <div class="label">Tecnologias mapeadas</div>
+  </div>
+  <div class="kpi">
+    <div class="value">2</div>
+    <div class="label">Portais integrados</div>
+  </div>
+</div>
+ 
+<!-- Gráficos -->
+<div class="grid">
+ 
+  <div class="card">
+    <h2>Vagas por Senioridade</h2>
+    <div class="chart-wrap"><canvas id="chartSenioridade"></canvas></div>
+  </div>
+ 
+  <div class="card">
+    <h2>Modalidade de Trabalho</h2>
+    <div class="chart-wrap"><canvas id="chartModalidade"></canvas></div>
+  </div>
+ 
+  <div class="card wide">
+    <h2>Top 15 Tecnologias Mais Demandadas</h2>
+    <div class="chart-wrap tall"><canvas id="chartTecnologias"></canvas></div>
+  </div>
+ 
+  <div class="card wide">
+    <h2>Top 10 Localizações</h2>
+    <div class="chart-wrap"><canvas id="chartLocalizacao"></canvas></div>
+  </div>
+ 
+  <div class="card">
+    <h2>Vagas por Portal</h2>
+    <div class="chart-wrap"><canvas id="chartOrigem"></canvas></div>
+  </div>
+ 
+  <div class="card">
+    <h2>Transparência Salarial</h2>
+    <div class="chart-wrap"><canvas id="chartSalarios"></canvas></div>
+  </div>
+ 
+</div>
+ 
+<script>
+const D = {"resumo": {"total_vagas": 102, "total_empresas": 72, "total_portais": 2, "total_techs": 7}, "senioridade": {"labels": ["Estágio", "Estágio/Trainee", "Pleno", "Sênior", "Entre 1 e 3 anos", "Júnior/Trainee", "Entre 3 e 5 anos", "Entre 5 e 10 anos", "Supervisão/Coordenação", "Sem experiência", "Técnico", "Auxiliar/Operacional"], "data": [20, 8, 8, 6, 5, 4, 3, 2, 1, 1, 1, 1]}, "localizacao": {"labels": ["São Paulo - SP", "São Paulo / SP", "Rio de Janeiro / RJ", "Curitiba - PR", "Belo Horizonte / MG", "Belo Horizonte - MG", "Manaus - AM", "Paulínia / SP", "Barão de Cocais / MG", "Osasco - SP"], "data": [11, 9, 5, 3, 3, 3, 3, 2, 2, 2]}, "modalidade": {"labels": ["Presencial"], "data": [102]}, "tecnologias": {"labels": ["power bi", "python", "sql", "databricks", "spark", "aws", "tableau"], "data": [5, 3, 3, 2, 2, 1, 1]}, "origem": {"labels": ["Vagas.com", "InfoJobs"], "data": [51, 51]}, "salarios": {"labels": ["Não informado"], "data": [102]}};
+const COLORS = ["#4361ee", "#3a0ca3", "#7209b7", "#f72585", "#4cc9f0", "#4895ef", "#560bad", "#480ca8", "#b5179e", "#f77f00", "#2ec4b6", "#e63946", "#06d6a0", "#118ab2", "#ffd166"];
+ 
+// ── Configuração padrão compartilhada ───────────────────────
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#334155';
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+ 
+const TOOLTIP = {
+  backgroundColor: '#1e293b',
+  titleColor: '#e2e8f0',
+  bodyColor: '#94a3b8',
+  borderColor: '#334155',
+  borderWidth: 1,
+  padding: 10,
+};
+ 
+// ── Funções auxiliares ───────────────────────────────────────
+ 
+function barChart(id, labels, data, horizontal = false) {
+  new Chart(document.getElementById(id), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: COLORS.slice(0, data.length),
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: horizontal ? 'y' : 'x',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: {
+        label: ctx => ` ${ctx.parsed[horizontal ? 'x' : 'y']} vagas`
+      }, ...TOOLTIP }},
+      scales: {
+        x: { grid: { color: '#1e293b' } },
+        y: { grid: { color: '#1e293b' } }
+      }
+    }
+  });
+}
+ 
+function doughnutChart(id, labels, data) {
+  new Chart(document.getElementById(id), {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: COLORS.slice(0, data.length),
+        borderWidth: 2,
+        borderColor: '#1e293b',
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '62%',
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { boxWidth: 12, padding: 14 }
+        },
+        tooltip: { ...TOOLTIP, callbacks: {
+          label: ctx => ` ${ctx.label}: ${ctx.parsed} vagas`
+        }}
+      }
+    }
+  });
+}
+ 
+// ── Instancia os gráficos ────────────────────────────────────
+ 
+barChart('chartSenioridade', D.senioridade.labels, D.senioridade.data);
+barChart('chartTecnologias', D.tecnologias.labels, D.tecnologias.data, true);
+barChart('chartLocalizacao', D.localizacao.labels, D.localizacao.data, true);
+doughnutChart('chartModalidade', D.modalidade.labels, D.modalidade.data);
+doughnutChart('chartOrigem',     D.origem.labels,     D.origem.data);
+doughnutChart('chartSalarios',   D.salarios.labels,   D.salarios.data);
+</script>
+ 
+</body>
+</html>

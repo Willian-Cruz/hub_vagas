@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# render.yaml — Infrastructure as Code do Hub Vagas no Render
+#
+# Como usar:
+#   1. Acesse dashboard.render.com
+#   2. Clique em "New" → "Blueprint"
+#   3. Conecte este repositório
+#   4. O Render lê este arquivo e cria todos os serviços automaticamente
+#
+# Serviços criados:
+#   - hub-vagas-db       → PostgreSQL gerenciado (plano free: 1GB, 90 dias)
+#   - hub-vagas-pipeline → Cron Job Docker que roda o pipeline diariamente
+# ─────────────────────────────────────────────────────────────────────────────
+
+databases:
+  - name: hub-vagas-db
+    databaseName: hub_vagas
+    user: hub_user
+    plan: free                    # 1 GB, expira após 90 dias no free tier
+
+services:
+  - type: cron                    # Cron Job: executa e termina (não fica ativo 24h)
+    name: hub-vagas-pipeline
+    plan: free
+    runtime: docker               # usa o Dockerfile na raiz do repositório
+    schedule: "0 9 * * *"         # todo dia às 09:00 UTC = 06:00 horário de Brasília
+    dockerCommand: python main.py
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hub-vagas-db      # o Render injeta a URL do banco automaticamente
+          property: connectionString
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /usr/bin
+      - key: PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+        value: /usr/bin/chromium

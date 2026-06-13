@@ -21,7 +21,7 @@ databases:
 services:
   - type: cron                    # Cron Job: executa e termina (não fica ativo 24h)
     name: hub-vagas-pipeline
-    plan: free
+    plan: starter
     runtime: docker               # usa o Dockerfile na raiz do repositório
     schedule: "0 9 * * *"         # todo dia às 09:00 UTC = 06:00 horário de Brasília
     dockerCommand: python main.py

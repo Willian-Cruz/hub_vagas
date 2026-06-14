@@ -395,7 +395,7 @@ tests/test_salary_service.py::TestExtrairSalario::test_faixa_com_rs             
 
 ## 👨‍💻 Autor
 
-Willian
+Willian da Cruz
 
 Projeto desenvolvido para fins de estudo, prática de Engenharia de Dados e construção de portfólio profissional.
 

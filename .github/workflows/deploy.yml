@@ -35,11 +35,13 @@ jobs:
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Acionar redeploy via Deploy Hook
+      - name: Acionar redeploy via API do Render
         run: |
           curl --fail --silent --show-error \
             --request POST \
-            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            --header "Content-Type: application/json" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys"
 
       - name: Confirmar disparo do deploy
         run: echo "Deploy acionado no Render com sucesso."

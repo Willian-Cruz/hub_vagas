@@ -25,7 +25,7 @@ class InfoJobsScraper(BaseScraper):
 
     BASE_URL  = (
         "https://www.infojobs.com.br/"
-        "empregos.aspx?palabra=engenheiro%20de%20dados&page={page}"
+        "empregos.aspx?palabra=cientista%20de%20dados&page={page}"
     )
     MAX_PAGES = 10
 

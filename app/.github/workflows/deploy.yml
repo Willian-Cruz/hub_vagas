@@ -23,11 +23,11 @@ jobs:
           cache: pip
 
       - name: Instalar dependencias
-        run: pip install -r requirements.txt
+        run: pip install -r .app/requirements.txt
 
       - name: Rodar testes
         run: pytest tests/ -v --tb=short
-        working-directory: ./app
+        working-directory: ./app/tests/
 
   deploy:
     name: Deploy no Render

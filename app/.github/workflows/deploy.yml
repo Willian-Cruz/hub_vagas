@@ -26,7 +26,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Rodar testes
-        run: pytest .app/tests/ -v --tb=short
+        run: pytest tests/ -v --tb=short
+        working-directory: ./app
 
   deploy:
     name: Deploy no Render

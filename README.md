@@ -44,6 +44,11 @@ Portais de Vagas
 ```text
 hub_vagas/
 │
+├── .github/
+│   └── workflows/
+│       ├── deploy.yml
+│       └── dashboard.yml
+│
 ├── app/
 │   ├── config/
 │   │   └── settings.py
@@ -70,25 +75,36 @@ hub_vagas/
 │   │   ├── dashboard_service.py
 │   │   ├── job_service.py
 │   │   ├── normalize_service.py
+│   │   ├── pipeline_service.py
 │   │   ├── salary_service.py
+│   │   ├── scheduler_service.py
 │   │   └── tech_service.py
 │   ├── utils/
 │   │   └── logger.py
 │   ├── generate_dashboard.py
-│   └── main.py
+│   ├── main.py
+│   └── scheduler.py
 │
 ├── dashboard/
 │   └── dashboard.html
+│
+├── logs/
+│   └── pipeline.log
 │
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py
 │   ├── test_analytics_service.py
 │   ├── test_normalize_service.py
-│   └── test_salary_service.py
+│   ├── test_pipeline_service.py
+│   ├── test_salary_service.py
+│   ├── test_scheduler_service.py
+│   └── test_scrapers.py
 │
 ├── .env.example
 ├── .gitignore
+├── Dockerfile
+├── render.yaml
 ├── requirements.txt
 └── README.md
 ```
@@ -120,6 +136,10 @@ hub_vagas/
 
 * Pandas
 
+### Agendamento
+
+* APScheduler
+
 ### Dashboard
 
 * Chart.js (via CDN)
@@ -127,6 +147,13 @@ hub_vagas/
 ### Testes
 
 * Pytest
+
+### CI/CD e Deploy
+
+* GitHub Actions
+* Render (Cron Job + PostgreSQL)
+* GitHub Pages
+* Docker
 
 ### Versionamento
 
@@ -249,24 +276,38 @@ DB_NAME=job_market
 
 ## ▶️ Executando o Projeto
 
+### Execução manual (uma vez)
+
 ```bash
 python app/main.py
 ```
 
-Saída esperada:
+### Agendamento automático (pipeline diário)
+
+```bash
+# Todo dia às 06:00 — horário de São Paulo (padrão)
+python app/scheduler.py
+
+# Horário customizado
+python app/scheduler.py --hora 8 --minuto 30
+
+# Modo debug — a cada N horas
+python app/scheduler.py --intervalo 2
+```
+
+Saída esperada no terminal:
 
 ```text
-Banco criado com sucesso!
-
-VagasScraper: 40 vagas
-InfoJobsScraper: 20 vagas
-
-Total coletado: 60 vagas
-
-Salva: Engenheiro de Dados | Senior: Pleno | Local: São Paulo - SP | Salário: Não informado
-
-Processamento finalizado.
+2026-01-15 06:00:00 | INFO     | services.pipeline_service | PIPELINE INICIADO
+2026-01-15 06:00:00 | INFO     | services.pipeline_service | Etapa 1/3: Coletando vagas...
+2026-01-15 06:04:21 | INFO     | services.pipeline_service | Coletadas: 87 vagas
+2026-01-15 06:04:21 | INFO     | services.pipeline_service | Etapa 2/3: Persistindo no banco...
+2026-01-15 06:04:23 | INFO     | services.pipeline_service | Persistência concluída — Salvas: 54 | Duplicadas: 33 | Erros: 0
+2026-01-15 06:04:23 | INFO     | services.pipeline_service | Etapa 3/3: Regenerando dashboard...
+2026-01-15 06:04:24 | INFO     | services.pipeline_service | PIPELINE CONCLUÍDO em 264.3s
 ```
+
+Os logs são gravados em `logs/pipeline.log` com rotação automática a cada 5 MB.
 
 ---
 
@@ -294,22 +335,26 @@ O dashboard exibe:
 
 ## 🧪 Testes
 
-Execute os testes a partir da raiz do projeto:
+Execute os testes a partir da pasta `app/`:
 
 ```bash
+cd app
 pytest tests/ -v
 ```
 
 Saída esperada:
 
 ```text
-tests/test_analytics_service.py::TestVagasPorSenioridade::test_retorna_dataframe PASSED
-tests/test_analytics_service.py::TestResumoGeral::test_valores_corretos          PASSED
-tests/test_normalize_service.py::TestNormalizarSenioridade::test_junior_variantes PASSED
-tests/test_normalize_service.py::TestNormalizarLocalizacao::test_remoto           PASSED
-tests/test_salary_service.py::TestExtrairSalario::test_faixa_com_rs               PASSED
+tests/test_analytics_service.py   PASSED  (23 testes)
+tests/test_normalize_service.py   PASSED  (10 testes)
+tests/test_pipeline_service.py    PASSED  (14 testes)
+tests/test_salary_service.py      PASSED  ( 7 testes)
+tests/test_scheduler_service.py   PASSED  (15 testes)
+tests/test_scrapers.py            PASSED  (18 testes)
+tests/test_settings.py            PASSED  ( 5 testes)
+tests/test_normalize_service.py   PASSED  ( 3 testes)
 ...
-43 passed in 0.52s
+95 passed in 5.66s
 ```
 
 ---
@@ -353,16 +398,24 @@ tests/test_salary_service.py::TestExtrairSalario::test_faixa_com_rs             
 * `conftest.py`: mock global do banco para testes sem PostgreSQL
 * Testes unitários com mock (23 testes, total acumulado: 43)
 
-### ⏳ Sprint 7
+### ✅ Sprint 7 — Agendamento e Pipeline
 
-* Agendamento automático
-* Pipeline diário
+* `PipelineService`: orquestra coleta → persistência → dashboard em uma execução única, retornando métricas (coletadas, salvas, duplicadas, erros, duração)
+* `SchedulerService`: agendamento com APScheduler — modo diário (cron) e modo intervalo, timezone America/Sao_Paulo
+* `scheduler.py`: ponto de entrada com CLI (`--hora`, `--minuto`, `--intervalo`)
+* `logger.py`: logging estruturado com `RotatingFileHandler` (5 MB, 3 backups), gravado em `logs/pipeline.log`
+* `conftest.py` atualizado: mock global de `database.connection` e `database.models`
+* Testes unitários (15 testes, total acumulado: 90)
 
-### ⏳ Sprint 8
+### ✅ Sprint 8 — Deploy em Nuvem
 
-* Deploy em nuvem
-* PostgreSQL gerenciado
-* Dashboard online
+* `Dockerfile`: container Python 3.12 com Chromium para o Playwright
+* `render.yaml`: Infrastructure as Code — banco PostgreSQL + Cron Job no Render
+* `.github/workflows/deploy.yml`: CI/CD automático — testa (95 testes) e aciona deploy via API do Render a cada push na main
+* `.github/workflows/dashboard.yml`: publica `dashboard.html` no GitHub Pages automaticamente
+* Deploy: Render (Cron Job `0 9 * * *` = 06:00 Brasília) + PostgreSQL gerenciado
+* Dashboard público: `https://willian-cruz.github.io/hub_vagas/`
+* Testes de settings (5 testes, total acumulado: 95)
 
 ---
 
@@ -378,24 +431,30 @@ tests/test_salary_service.py::TestExtrairSalario::test_faixa_com_rs             
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)
+![Docker](https://img.shields.io/badge/Deploy-Docker-2496ED?logo=docker)
+![Render](https://img.shields.io/badge/Render-Cron%20Job-46E3B7)
+![APScheduler](https://img.shields.io/badge/Agendamento-APScheduler-blueviolet)
 ![Chart.js](https://img.shields.io/badge/Dashboard-Chart.js-orange)
-![Pytest](https://img.shields.io/badge/Testes-Pytest-green)
-![Status](https://img.shields.io/badge/Status-Em%20Desenvolvimento-yellow)
+![Pytest](https://img.shields.io/badge/Testes-95%20passed-green)
+![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?logo=githubactions)
+![Status](https://img.shields.io/badge/Status-Em%20Produção-brightgreen)
 
 ## Estatísticas Atuais
 
-* Vagas coletadas: 60+
+* Vagas coletadas: 100+
 * Portais integrados: 2
 * Tecnologias monitoradas: 20+
-* Testes automatizados: 43
-* Banco de dados: PostgreSQL
-* Dashboard: HTML estático com Chart.js
+* Testes automatizados: 95
+* Banco de dados: PostgreSQL (Render)
+* Dashboard: https://willian-cruz.github.io/hub_vagas/
+* Agendamento: Render Cron Job (diário às 06:00, Brasília)
+* CI/CD: GitHub Actions (deploy automático a cada push)
 
 ---
 
 ## 👨‍💻 Autor
 
-Willian da Cruz
+Willian
 
 Projeto desenvolvido para fins de estudo, prática de Engenharia de Dados e construção de portfólio profissional.
 

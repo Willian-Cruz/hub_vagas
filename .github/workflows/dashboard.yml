@@ -10,8 +10,8 @@
 #   Ative o GitHub Pages em Settings > Pages > Source: GitHub Actions
 #
 # Como usar:
-#   Após o pipeline gerar um novo dashboard.html localmente:
-#     git add dashboard/dashboard.html
+#   Após o pipeline gerar um novo index.html localmente:
+#     git add dashboard/index.html
 #     git commit -m "chore: atualiza dashboard"
 #     git push
 #   O workflow publica automaticamente.
@@ -23,50 +23,40 @@ name: Publicar dashboard no GitHub Pages
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "dashboard/index.html"   # só dispara quando o dashboard mudar
-  workflow_dispatch:                 # disparo manual pela interface do GitHub
+    branches:
+      - main
+
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
 
   deploy:
     name: Publicar no GitHub Pages
     runs-on: ubuntu-latest
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Checkout do código
+      - name: Checkout código
         uses: actions/checkout@v4
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
-      
+
       - name: Debug artefato
         run: |
-          echo "Diretório atual:"
           pwd
-
-          echo ""
-          echo "Arquivos HTML:"
           find . -name "*.html"
-
-          echo ""
-          echo "Arquivo na raíz:"
           ls -la
 
-      - name: Fazer upload da pasta dashboard/
+      - name: Fazer upload do site
         uses: actions/upload-pages-artifact@v3
         with:
           path: .

@@ -58,16 +58,18 @@ jobs:
           echo "Diretório atual:"
           pwd
 
+          echo ""
           echo "Arquivos HTML:"
           find . -name "*.html"
 
-          echo "Conteúdo dashboard:"
-          ls -R dashboard
+          echo ""
+          echo "Arquivo na raíz:"
+          ls -la
 
       - name: Fazer upload da pasta dashboard/
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dashboard/
+          path: .
 
       - name: Publicar no GitHub Pages
         id: deployment

@@ -25,7 +25,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "dashboard/dashboard.html"   # só dispara quando o dashboard mudar
+      - "dashboard/index.html"   # só dispara quando o dashboard mudar
   workflow_dispatch:                 # disparo manual pela interface do GitHub
 
 permissions:

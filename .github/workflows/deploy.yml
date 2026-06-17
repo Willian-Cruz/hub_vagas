@@ -27,6 +27,7 @@ jobs:
 
       - name: Rodar testes
         run: pytest tests/ -v --tb=short
+        working-directory: ./app
 
   deploy:
     name: Deploy no Render

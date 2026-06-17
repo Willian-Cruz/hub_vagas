@@ -18,4 +18,4 @@ for vaga in vagas:
 
     JobRepository.salvar(vaga)
 
-print("\nProcessamento finalizado.")
+ls 

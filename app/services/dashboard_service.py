@@ -32,7 +32,7 @@ def _df_to_chart(df, label_col="label", value_col="total"):
 
 class DashboardService:
 
-    OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "dashboard")
+    OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
     OUTPUT_FILE = os.path.join(OUTPUT_DIR, "index.html")
 
     @classmethod

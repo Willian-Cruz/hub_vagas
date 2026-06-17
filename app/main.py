@@ -19,9 +19,3 @@ for vaga in vagas:
     JobRepository.salvar(vaga)
 
 print("\nProcessamento finalizado.")
-
-from config.settings import DATABASE_URL
-
-print("=" * 80)
-print("DATABASE_URL:", DATABASE_URL)
-print("=" * 80)

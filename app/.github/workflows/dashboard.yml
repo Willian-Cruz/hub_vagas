@@ -52,6 +52,17 @@ jobs:
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
+      
+      - name: Debug artefato
+        run: |
+          echo "Diretório atual:"
+          pwd
+
+          echo "Arquivos HTML:"
+          find . -name "*.html"
+
+          echo "Conteúdo dashboard:"
+          ls -R dashboard
 
       - name: Fazer upload da pasta dashboard/
         uses: actions/upload-pages-artifact@v3

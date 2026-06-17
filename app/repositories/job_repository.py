@@ -1,4 +1,4 @@
-from database.connection import Sessionlocal
+from database.connection import SessionLocal
 from database.job_model import Job
 from database.tech_model import Technology
 from services.tech_service import TechnologyService
@@ -11,7 +11,7 @@ class JobRepository:
     @staticmethod
     def salvar(vaga):
 
-        session = Sessionlocal()
+        session = SessionLocal()
 
         try:
             # ── Verifica duplicata pelo link ──────────────────────────

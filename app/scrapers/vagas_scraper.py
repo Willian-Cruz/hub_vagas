@@ -21,7 +21,7 @@ class VagasScraper(BaseScraper):
         5. Com todo o conteúdo carregado, parseia o HTML final com BeautifulSoup
     """
 
-    URL       = "https://www.vagas.com.br/vagas-de-cientista-de-dados"
+    URL       = "https://www.vagas.com.br/vagas-de-engenheiro-de-dados"
     MAX_PAGES = 20  # número máximo de scrolls (cada scroll ≈ 1 "página")
 
     HEADERS = {

@@ -4,8 +4,7 @@ PipelineService — orquestra uma execução completa do pipeline.
 Responsabilidades:
     1. Coleta vagas via CollectorService (todos os scrapers)
     2. Persiste cada vaga via JobRepository (com normalização)
-    3. Regenera o dashboard HTML atualizado
-    4. Registra início, fim, duração e erros no log
+    3. Registra início, fim, duração e erros no log
 
 Por que separar do main.py?
     O main.py se torna apenas um ponto de entrada manual.
@@ -17,7 +16,6 @@ import time
 from utils.logger import get_logger
 from services.collector_service import CollectorService
 from repositories.job_repository import JobRepository
-from services.dashboard_service import DashboardService
 
 logger = get_logger(__name__)
 
@@ -27,7 +25,7 @@ class PipelineService:
     @staticmethod
     def executar() -> dict:
         """
-        Executa o pipeline completo de coleta, persistência e dashboard.
+        Executa o pipeline completo de coleta e persistência.
 
         Returns:
             dict com métricas da execução:
@@ -57,13 +55,13 @@ class PipelineService:
 
         try:
             # ── 1. Coleta ──────────────────────────────────────────────
-            logger.info("Etapa 1/3: Coletando vagas...")
+            logger.info("Etapa 1/2: Coletando vagas...")
             vagas = CollectorService.coletar_todas_vagas()
             metricas["coletadas"] = len(vagas)
             logger.info(f"Coletadas: {len(vagas)} vagas")
 
             # ── 2. Persistência ────────────────────────────────────────
-            logger.info("Etapa 2/3: Persistindo no banco...")
+            logger.info("Etapa 2/2: Persistindo no banco...")
 
             for vaga in vagas:
                 resultado = JobRepository.salvar(vaga)
@@ -81,11 +79,6 @@ class PipelineService:
                 f"Duplicadas: {metricas['duplicadas']} | "
                 f"Erros: {metricas['erros']}"
             )
-
-            # ── 3. Dashboard ───────────────────────────────────────────
-            logger.info("Etapa 3/3: Regenerando dashboard...")
-            DashboardService.gerar()
-            logger.info("Dashboard atualizado com sucesso")
 
             metricas["sucesso"] = True
 

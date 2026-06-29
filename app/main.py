@@ -16,6 +16,4 @@ print(f"\nTotal coletado: " f"{len(vagas)} vagas\n")
 
 for vaga in vagas:
 
-    JobRepository.salvar(vaga)
-
-ls 
+    JobRepository.salvar(vaga) 

@@ -1,17 +1,36 @@
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
+
 from database.connection import SessionLocal
 from database.job_model import Job
 from database.tech_model import Technology
 from services.tech_service import TechnologyService
 from services.normalize_service import NormalizeService
 from services.salary_service import SalaryService
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+# Resultados possíveis de JobRepository.salvar().
+# O PipelineService usa esses valores para montar as métricas da execução.
+SALVA = "salva"
+DUPLICADA = "duplicada"
+ERRO = "erro"
 
 
 class JobRepository:
 
     @staticmethod
-    def salvar(vaga):
+    def salvar(vaga) -> str:
+        """
+        Persiste uma vaga normalizada, com as tecnologias extraídas da descrição.
+
+        Returns:
+            "salva"      — a vaga foi inserida
+            "duplicada"  — já existia uma vaga com o mesmo link
+            "erro"       — falha ao salvar (a transação sofre rollback)
+        """
 
         session = SessionLocal()
 
@@ -20,8 +39,8 @@ class JobRepository:
             vaga_existente = session.query(Job).filter(Job.link == vaga.link).first()
 
             if vaga_existente:
-                print(f"Vaga já existe: {vaga.titulo}")
-                return
+                logger.info(f"Vaga já existe: {vaga.titulo}")
+                return DUPLICADA
 
             # ── Sprint 5: normalização antes de salvar ────────────────
 
@@ -68,16 +87,25 @@ class JobRepository:
             session.add(nova_vaga)
             session.commit()
 
-            print(
+            logger.info(
                 f"Salva: {vaga.titulo} | "
-                f"Senior: {senioridade_norm} | "
+                f"Senioridade: {senioridade_norm} | "
                 f"Local: {localizacao_norm} | "
                 f"Salário: {salario}"
             )
+            return SALVA
+
+        except IntegrityError:
+            # A restrição UNIQUE do link é a garantia final contra duplicatas,
+            # inclusive quando dois processos salvam a mesma vaga ao mesmo tempo.
+            session.rollback()
+            logger.info(f"Vaga duplicada (restrição UNIQUE no link): {vaga.titulo}")
+            return DUPLICADA
 
         except Exception as e:
             session.rollback()
-            print(f"Erro ao salvar vaga: {e}")
+            logger.error(f"Erro ao salvar vaga '{vaga.titulo}': {e}")
+            return ERRO
 
         finally:
             session.close()

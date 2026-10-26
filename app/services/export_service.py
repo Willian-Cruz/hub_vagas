@@ -2,6 +2,9 @@ import os
 import pandas as pd
 from sqlalchemy import text
 from database.connection import engine
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ExportService:
@@ -70,5 +73,5 @@ class ExportService:
 
         df.to_excel(caminho, index=False, sheet_name="vagas")
 
-        print(f"Exportado: {len(df)} vaga(s) -> {caminho}")
+        logger.info(f"Exportado: {len(df)} vaga(s) -> {caminho}")
         return caminho

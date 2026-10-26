@@ -16,8 +16,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 import pytest
+from sqlalchemy.exc import IntegrityError
 
-from repositories.job_repository import JobRepository
+from repositories.job_repository import JobRepository, SALVA, DUPLICADA, ERRO
 from database.job_model import Job
 from schemas.job_schema import JobSchema
 
@@ -266,3 +267,46 @@ class TestJobCriado:
         assert job.link is not None
         assert job.origem is not None
         assert job.data_coleta is not None
+
+
+# ═══════════════════════════════════════════════════════════════
+# TESTES — valor de retorno (contrato com o PipelineService)
+# ═══════════════════════════════════════════════════════════════
+
+class TestRetorno:
+    """
+    O PipelineService conta salvas, duplicadas e erros a partir do valor
+    devolvido por salvar(). Se salvar() devolver None, toda vaga vira "erro".
+    """
+
+    def test_vaga_nova_retorna_salva(self):
+        session_class, session = _mock_session()
+
+        with patch("repositories.job_repository.SessionLocal", session_class):
+            assert JobRepository.salvar(_vaga()) == SALVA
+
+    def test_vaga_existente_retorna_duplicada(self):
+        job_existente = MagicMock(spec=Job)
+        session_class, session = _mock_session(duplicata=job_existente)
+
+        with patch("repositories.job_repository.SessionLocal", session_class):
+            assert JobRepository.salvar(_vaga()) == DUPLICADA
+
+    def test_violacao_de_unicidade_no_commit_retorna_duplicada(self):
+        """Corrida entre dois processos: a restrição UNIQUE do link decide."""
+        session_class, session = _mock_session()
+        session.commit.side_effect = IntegrityError("INSERT", {}, Exception("link duplicado"))
+
+        with patch("repositories.job_repository.SessionLocal", session_class):
+            assert JobRepository.salvar(_vaga()) == DUPLICADA
+
+        session.rollback.assert_called_once()
+
+    def test_erro_inesperado_retorna_erro(self):
+        session_class, session = _mock_session()
+        session.commit.side_effect = Exception("conexão perdida")
+
+        with patch("repositories.job_repository.SessionLocal", session_class):
+            assert JobRepository.salvar(_vaga()) == ERRO
+
+        session.rollback.assert_called_once()

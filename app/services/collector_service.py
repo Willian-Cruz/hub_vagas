@@ -2,6 +2,9 @@ import time
 from scrapers.vagas_scraper import VagasScraper
 from scrapers.infojobs_scraper import InfoJobsScraper
 from scrapers.gupy_scraper import GupyScraper
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class CollectorService:
@@ -24,9 +27,7 @@ class CollectorService:
 
         for scraper in cls.SCRAPERS:
 
-            print(f"\n{'─' * 50}")
-            print(f"Iniciando: {scraper.__name__}")
-            print(f"{'─' * 50}")
+            logger.info(f"Iniciando: {scraper.__name__}")
 
             inicio = time.time()
 
@@ -34,8 +35,8 @@ class CollectorService:
                 resultado = scraper.coletar()
                 duracao   = time.time() - inicio
 
-                print(
-                    f"\n✔ {scraper.__name__}: "
+                logger.info(
+                    f"{scraper.__name__}: "
                     f"{len(resultado)} vagas coletadas "
                     f"em {duracao:.1f}s"
                 )
@@ -44,13 +45,11 @@ class CollectorService:
 
             except Exception as erro:
                 duracao = time.time() - inicio
-                print(
-                    f"\n✘ {scraper.__name__} falhou "
+                logger.error(
+                    f"{scraper.__name__} falhou "
                     f"após {duracao:.1f}s: {erro}"
                 )
 
-        print(f"\n{'═' * 50}")
-        print(f"Total geral: {len(todas_vagas)} vagas coletadas")
-        print(f"{'═' * 50}\n")
+        logger.info(f"Total geral: {len(todas_vagas)} vagas coletadas")
 
         return todas_vagas

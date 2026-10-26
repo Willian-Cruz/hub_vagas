@@ -60,6 +60,13 @@ class PipelineService:
             metricas["coletadas"] = len(vagas)
             logger.info(f"Coletadas: {len(vagas)} vagas")
 
+            # Zero vagas quase sempre indica scraper quebrado ou portal bloqueando.
+            # Falhar aqui evita um "sucesso" silencioso que esconde o problema.
+            if not vagas:
+                raise RuntimeError(
+                    "Nenhuma vaga coletada: verifique os scrapers e o acesso aos portais"
+                )
+
             # ── 2. Persistência ────────────────────────────────────────
             logger.info("Etapa 2/2: Persistindo no banco...")
 

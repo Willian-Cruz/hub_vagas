@@ -1,5 +1,9 @@
 from abc import ABC, abstractmethod
 
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class BaseScraper(ABC):
     """
@@ -24,4 +28,4 @@ class BaseScraper(ABC):
     @classmethod
     def _log(cls, msg: str) -> None:
         """Log padronizado com o nome do scraper."""
-        print(f"[{cls.__name__}] {msg}")
+        logger.info(f"[{cls.__name__}] {msg}")

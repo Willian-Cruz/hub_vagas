@@ -68,7 +68,8 @@ hub_vagas/
 │   ├── scrapers/
 │   │   ├── base_scraper.py
 │   │   ├── vagas_scraper.py
-│   │   └── infojobs_scraper.py
+│   │   ├── infojobs_scraper.py
+│   │   └── gupy_scraper.py
 │   ├── services/
 │   │   ├── analytics_service.py
 │   │   ├── collector_service.py
@@ -168,6 +169,7 @@ hub_vagas/
 
 * ✅ Vagas.com
 * ✅ InfoJobs
+* ✅ Gupy (calibração de seletores pendente — ver `scrapers/gupy_scraper.py`)
 
 ### Planejados
 
@@ -175,7 +177,6 @@ hub_vagas/
 * ⏳ Indeed
 * ⏳ Glassdoor
 * ⏳ Catho
-* ⏳ Gupy
 
 ---
 

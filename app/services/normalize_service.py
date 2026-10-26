@@ -7,15 +7,15 @@ class NormalizeService:
     # A ordem importa: mais específico primeiro.
     # _____________________________________________________
     SENIORIDADE_MAP = [
-        
-        (r"trainee|est[aá]gi[oó]|estagi[aá]rio", "Estágio/Trainee"),
-        (r"jr\.?|j[uú]nior", "Júnior"),
-        (r"pl\.?|pleno", "Pleno"),
-        (r"sr\.?|s[eê]nior|senior", "Sênior"),
-        (r"especialista|specialist", "Especialista"),
-        (r"coordenador|coordinator", "Coordenador"),
-        (r"gerente|manager|lider|l[ií]der|lead", "Liderança"),
-        (r"diretor|director|head|vp\b", "Diretoria"),
+        (r"jr\.?\s*/\s*trainee|j[uú]nior\s*/\s*trainee", "Júnior"),  # 'Júnior/Trainee' → Júnior
+        (r"jr\.?|j[uú]nior",                              "Júnior"),
+        (r"pl\.?|pleno",                                  "Pleno"),
+        (r"sr\.?|s[eê]nior|senior",                       "Sênior"),
+        (r"especialista|specialist",                       "Especialista"),
+        (r"coordenador|coordinator",                       "Coordenador"),
+        (r"gerente|manager|lider|l[ií]der|lead",           "Liderança"),
+        (r"diretor|director|head|vp\b",                    "Diretoria"),
+        (r"trainee|est[aá]gi[oó]|estagi[aá]rio",          "Estágio/Trainee"),  # último: só trainee puro
     ]
     
     @classmethod
@@ -113,3 +113,4 @@ class NormalizeService:
         if not nome:
             return "Não informado"
         return nome.strip()
+    

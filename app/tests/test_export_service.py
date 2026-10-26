@@ -20,6 +20,7 @@ VAGAS_DF = pd.DataFrame({
     "origem": ["Vagas.com", "InfoJobs"],
     "link": ["https://exemplo.com/1", "https://exemplo.com/2"],
     "descricao": ["Descrição 1", "Descrição 2"],
+    "data_coleta": pd.to_datetime(["2026-06-20 10:00:00", "2026-06-20 10:05:00"]),
     "tecnologias": ["python, sql", "python, airflow, sql"],
 })
 
@@ -62,6 +63,7 @@ class TestExportar:
             "Engenheiro de Dados Jr",
         ]
         assert "tecnologias" in df_lido.columns
+        assert "data_coleta" in df_lido.columns
 
     def test_cria_diretorio_se_nao_existir(self, tmp_path):
         novo_dir = os.path.join(str(tmp_path), "pasta_nova")

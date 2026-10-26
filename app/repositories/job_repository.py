@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from database.connection import SessionLocal
 from database.job_model import Job
 from database.tech_model import Technology
@@ -40,6 +42,7 @@ class JobRepository:
                 salario=salario,
                 link=vaga.link,
                 origem=vaga.origem,
+                data_coleta=datetime.now(),
             )
 
             session.add(nova_vaga)

@@ -1,6 +1,7 @@
 import time
 from scrapers.vagas_scraper import VagasScraper
 from scrapers.infojobs_scraper import InfoJobsScraper
+from scrapers.gupy_scraper import GupyScraper
 
 
 class CollectorService:
@@ -14,7 +15,7 @@ class CollectorService:
         - Retornar a lista consolidada de vagas
     """
 
-    SCRAPERS = [VagasScraper, InfoJobsScraper]
+    SCRAPERS = [VagasScraper, InfoJobsScraper, GupyScraper]
 
     @classmethod
     def coletar_todas_vagas(cls) -> list:

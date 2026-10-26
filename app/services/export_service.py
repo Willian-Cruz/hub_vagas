@@ -38,13 +38,15 @@ class ExportService:
                 j.origem,
                 j.link,
                 j.descricao,
+                j.data_coleta,
                 STRING_AGG(t.nome, ', ' ORDER BY t.nome) AS tecnologias
             FROM jobs j
             LEFT JOIN job_technologies jt ON jt.job_id = j.id
             LEFT JOIN technologies t ON t.id = jt.technology_id
             GROUP BY
                 j.id, j.titulo, j.empresa, j.senioridade,
-                j.localizacao, j.salario, j.origem, j.link, j.descricao
+                j.localizacao, j.salario, j.origem, j.link,
+                j.descricao, j.data_coleta
             ORDER BY j.id
         """
         with engine.connect() as conn:

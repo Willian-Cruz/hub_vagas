@@ -6,12 +6,20 @@ Por que este arquivo existe?
 Vários módulos do projeto importam `database.connection` no nível de módulo
 (fora de funções), o que faz o SQLAlchemy tentar conectar ao PostgreSQL
 assim que o arquivo é carregado — antes mesmo de qualquer teste rodar.
+Pior: `settings.py` levanta RuntimeError se não houver DATABASE_URL/DB_*
+configurados, o que aconteceria de cara em CI sem um .env.
 
 Nos testes unitários não temos banco disponível, então interceptamos
-essas importações aqui, antes que qualquer arquivo de teste seja coletado.
+essa importação aqui, antes que qualquer arquivo de teste seja coletado.
+
+Importante: NÃO mockamos `database.models`. O módulo só contém
+`base = declarative_base()` — é seguro importar de verdade, não abre
+nenhuma conexão. Mocká-lo como um MagicMock() quebra silenciosamente
+qualquer teste que use as classes reais (Job, Technology), porque
+herdar de um MagicMock() não produz uma classe funcional em Python.
 
 O conftest.py é executado pelo pytest antes de tudo, garantindo que
-os mocks estejam no lugar certo na hora certa.
+o mock esteja no lugar certo na hora certa.
 """
 import sys
 from unittest.mock import MagicMock
@@ -19,17 +27,9 @@ from unittest.mock import MagicMock
 # ── Mock de database.connection ──────────────────────────────────────────────
 # Substitui o módulo inteiro por um objeto fake.
 # Qualquer `from database.connection import engine` ou
-# `from database.connection import Sessionlocal` receberá o mock.
+# `from database.connection import SessionLocal` receberá o mock.
 _mock_connection = MagicMock()
-_mock_connection.engine      = MagicMock()
-_mock_connection.Sessionlocal = MagicMock()
+_mock_connection.engine = MagicMock()
+_mock_connection.SessionLocal = MagicMock()
 
 sys.modules["database.connection"] = _mock_connection
-
-# ── Mock de database.models ───────────────────────────────────────────────────
-# base.metadata.create_all() é chamado no main.py e scheduler.py.
-# Sem esse mock, o import desses módulos nos testes tentaria criar tabelas.
-_mock_models = MagicMock()
-_mock_models.base = MagicMock()
-
-sys.modules["database.models"] = _mock_models

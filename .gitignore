@@ -99,3 +99,10 @@ test-results/
 # Não há arquivos sensíveis locais para o Render.
 # As credenciais são configuradas diretamente no painel do Render
 # ou via render.yaml (sem valores sensíveis — apenas referências).
+# =========================
+# Arquivos de diagnóstico e patches
+# =========================
+# Gerados por app/debug_vagas.py
+debug_*.html
+debug_*.png
+*.patch

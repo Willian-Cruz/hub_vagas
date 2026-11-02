@@ -19,7 +19,7 @@ import argparse
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from database.connection import engine
+from database.connection import engine, ensure_local_database_exists
 from database.models import base
 from database.job_model import Job
 from database.tech_model import Technology
@@ -60,6 +60,9 @@ if __name__ == "__main__":
     args = parse_args()
 
     # Cria tabelas no banco se ainda não existirem
+    if ensure_local_database_exists():
+        logger.info("Banco local criado com sucesso")
+
     base.metadata.create_all(bind=engine)
     logger.info("Banco verificado/criado com sucesso")
 

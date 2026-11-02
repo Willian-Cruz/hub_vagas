@@ -1,160 +1,233 @@
 import time
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from urllib.parse import urljoin
+
 from bs4 import BeautifulSoup
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
+from playwright.sync_api import sync_playwright
+
+from constants.selectors import (
+    VAGAS_COMPANY,
+    VAGAS_DESCRIPTION,
+    VAGAS_JOB_CARD,
+    VAGAS_LOCATION,
+    VAGAS_SENIORITY,
+    VAGAS_TITLE,
+)
 from schemas.job_schema import JobSchema
-from scrapers.base_scraper import BaseScraper
+from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
 
 
 class VagasScraper(BaseScraper):
-    """
-    Scraper para vagas.com.br.
+    """Scraper para vagas.com.br, que carrega resultados com infinite scroll."""
 
-    O portal usa infinite scroll com JavaScript:
-    novas vagas são carregadas via requisição assíncrona
-    conforme o usuário rola a página até o fim.
+    SOURCE = "Vagas.com"
+    URL = "https://www.vagas.com.br/vagas-de-engenheiro-de-dados"
+    MAX_PAGES = 20  # máximo de scrolls após o carregamento da página inicial
+    RESULTS_WAIT_MS = 10_000
+    NEW_RESULTS_WAIT_MS = 6_000
+    MAX_NO_CHANGE = 3
+    NAVIGATION_TIMEOUT_MS = 40_000
 
-    Estratégia de paginação:
-        1. Abre o browser headless com Playwright
-        2. Rola até o fim da página (dispara o lazy-load)
-        3. Aguarda novas vagas aparecerem no DOM
-        4. Repete até não haver novas vagas ou atingir MAX_PAGES scrolls
-        5. Com todo o conteúdo carregado, parseia o HTML final com BeautifulSoup
-    """
-
-    URL       = "https://www.vagas.com.br/vagas-de-engenheiro-de-dados"
-    MAX_PAGES = 20  # número máximo de scrolls (cada scroll ≈ 1 "página")
-
-    HEADERS = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        )
-    }
+    USER_AGENT = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
 
     @classmethod
-    def coletar(cls) -> list:
+    def coletar(cls) -> ScrapeResult:
+        paginas_processadas = 0
+        browser = None
 
-        vagas = []
-
-        with sync_playwright() as p:
-
-            browser = p.chromium.launch(headless=True)
-            page    = browser.new_page(user_agent=cls.HEADERS["User-Agent"])
-
-            try:
-                cls._log(f"Acessando {cls.URL}")
-                page.goto(cls.URL, timeout=40_000)
-                page.wait_for_load_state("networkidle", timeout=20_000)
-
-                scroll_count    = 0
-                sem_novidade    = 0      # quantas vezes seguidas não apareceu nada novo
-                MAX_SEM_NOVIDADE = 3     # para após 3 scrolls consecutivos sem resultado
-
-                while scroll_count < cls.MAX_PAGES:
-
-                    vagas_antes = len(page.query_selector_all("li.vaga"))
-
-                    # Rola até o final para disparar o lazy-load
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-
-                    # Aguarda até aparecer pelo menos uma vaga nova (ou timeout de 6s)
-                    try:
-                        page.wait_for_function(
-                            f"document.querySelectorAll('li.vaga').length > {vagas_antes}",
-                            timeout=6_000,
-                        )
-                        sem_novidade = 0  # reset: apareceu coisa nova
-                    except PlaywrightTimeout:
-                        sem_novidade += 1
-                        cls._log(
-                            f"Scroll {scroll_count + 1}: sem novas vagas "
-                            f"({sem_novidade}/{MAX_SEM_NOVIDADE})"
-                        )
-                        if sem_novidade >= MAX_SEM_NOVIDADE:
-                            cls._log("Fim da lista detectado.")
-                            break
-
-                    vagas_depois = len(page.query_selector_all("li.vaga"))
-                    cls._log(
-                        f"Scroll {scroll_count + 1}/{cls.MAX_PAGES} — "
-                        f"{vagas_depois} vagas carregadas"
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                try:
+                    page = browser.new_page(user_agent=cls.USER_AGENT)
+                    cls._log(f"Acessando {cls.URL}")
+                    response = page.goto(
+                        cls.URL,
+                        timeout=cls.NAVIGATION_TIMEOUT_MS,
+                        wait_until="domcontentloaded",
                     )
+                    paginas_processadas = 1
 
-                    scroll_count += 1
+                    status_http = getattr(response, "status", None)
+                    if status_http is not None and status_http >= 400:
+                        return cls._resultado_falha(
+                            f"Portal respondeu HTTP {status_http}.", paginas_processadas
+                        )
 
-                    # Pequena pausa para não sobrecarregar o servidor
-                    time.sleep(0.5)
+                    try:
+                        page.wait_for_selector(
+                            VAGAS_JOB_CARD,
+                            state="attached",
+                            timeout=cls.RESULTS_WAIT_MS,
+                        )
+                    except PlaywrightTimeout:
+                        html = page.content()
+                        jobs, invalidos, cards = cls._parsear_detalhado(html)
+                        if jobs:
+                            return ScrapeResult(
+                                source=cls.SOURCE,
+                                status=ScrapeStatus.PARTIAL,
+                                jobs=jobs,
+                                pages_processed=paginas_processadas,
+                                error="Timeout aguardando o seletor; cards apareceram no HTML.",
+                            )
+                        if cards == 0 and cls._pagina_sem_resultados(html):
+                            return ScrapeResult(
+                                source=cls.SOURCE,
+                                status=ScrapeStatus.EMPTY,
+                                pages_processed=paginas_processadas,
+                            )
+                        detalhe = (
+                            f"{invalidos} card(s) sem título ou link válido."
+                            if invalidos
+                            else f"Nenhum card '{VAGAS_JOB_CARD}' apareceu após o carregamento."
+                        )
+                        return cls._resultado_falha(detalhe, paginas_processadas)
 
-                # Com todo o conteúdo carregado, parseia o HTML final
-                html  = page.content()
-                vagas = cls._parsear(html)
+                    sem_novidade = 0
+                    for scroll_num in range(cls.MAX_PAGES):
+                        vagas_antes = page.locator(VAGAS_JOB_CARD).count()
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
 
-            except Exception as e:
-                cls._log(f"Erro durante a coleta: {e}")
+                        try:
+                            page.wait_for_function(
+                                "count => "
+                                "document.querySelectorAll('li.vaga').length > count",
+                                arg=vagas_antes,
+                                timeout=cls.NEW_RESULTS_WAIT_MS,
+                            )
+                            sem_novidade = 0
+                        except PlaywrightTimeout:
+                            sem_novidade += 1
 
-            finally:
-                browser.close()
+                        vagas_depois = page.locator(VAGAS_JOB_CARD).count()
+                        cls._log(
+                            f"Scroll {scroll_num + 1}/{cls.MAX_PAGES}: "
+                            f"{vagas_depois} card(s) carregados"
+                        )
 
-        cls._log(f"Total coletado: {len(vagas)} vagas")
-        return vagas
+                        if sem_novidade >= cls.MAX_NO_CHANGE:
+                            break
+                        if vagas_depois > vagas_antes:
+                            time.sleep(0.5)
 
-    # ── Parser ────────────────────────────────────────────────────────────
+                    html = page.content()
+                    jobs, invalidos, cards = cls._parsear_detalhado(html)
+
+                    if not jobs:
+                        if cards == 0 and cls._pagina_sem_resultados(html):
+                            return ScrapeResult(
+                                source=cls.SOURCE,
+                                status=ScrapeStatus.EMPTY,
+                                pages_processed=paginas_processadas,
+                            )
+                        detalhe = (
+                            f"{invalidos} card(s) sem título ou link válido."
+                            if invalidos
+                            else f"HTML não contém cards válidos '{VAGAS_JOB_CARD}'."
+                        )
+                        return cls._resultado_falha(detalhe, paginas_processadas)
+
+                    status = (
+                        ScrapeStatus.PARTIAL if invalidos else ScrapeStatus.SUCCESS
+                    )
+                    erro = (
+                        f"{invalidos} card(s) ignorado(s) por dados incompletos."
+                        if invalidos
+                        else None
+                    )
+                    cls._log(f"Resultado: {status.value}; {len(jobs)} vaga(s)")
+                    return ScrapeResult(
+                        source=cls.SOURCE,
+                        status=status,
+                        jobs=jobs,
+                        pages_processed=paginas_processadas,
+                        error=erro,
+                    )
+                finally:
+                    browser.close()
+        except Exception as exc:
+            return cls._resultado_falha(
+                f"{type(exc).__name__}: {exc}", paginas_processadas
+            )
+
+        return cls._resultado_falha("A navegação terminou sem resultado.", paginas_processadas)
 
     @classmethod
-    def _parsear(cls, html: str) -> list:
-        """Recebe o HTML completo e extrai todas as vagas."""
+    def _resultado_falha(cls, erro: str, paginas_processadas: int) -> ScrapeResult:
+        cls._log(f"Falha na coleta: {erro}")
+        return ScrapeResult(
+            source=cls.SOURCE,
+            status=ScrapeStatus.FAILED,
+            pages_processed=paginas_processadas,
+            error=erro,
+        )
 
-        soup  = BeautifulSoup(html, "html.parser")
-        cards = soup.find_all("li", class_="vaga")
-        vagas = []
+    @classmethod
+    def _parsear(cls, html: str) -> list[JobSchema]:
+        """Extrai vagas do HTML; separado para testes sem navegador/rede."""
+        return cls._parsear_detalhado(html)[0]
+
+    @classmethod
+    def _parsear_detalhado(cls, html: str) -> tuple[list[JobSchema], int, int]:
+        soup = BeautifulSoup(html, "html.parser")
+        cards = soup.select(VAGAS_JOB_CARD)
+        vagas: list[JobSchema] = []
+        cards_invalidos = 0
 
         for card in cards:
+            titulo_el = card.select_one(VAGAS_TITLE)
+            titulo = titulo_el.get_text(" ", strip=True) if titulo_el else ""
+            link_el = card.select_one(VAGAS_TITLE)
+            href = (link_el.get("href") or "").strip() if link_el else ""
 
-            try:
-                titulo = card.find("a", class_="link-detalhes-vaga").get_text(" ", strip=True)
-            except Exception:
-                titulo = "Não informado"
-
-            try:
-                empresa = card.find("span", class_="emprVaga").get_text(strip=True)
-            except Exception:
-                empresa = "Não informado"
-
-            try:
-                senioridade = card.find("span", class_="nivelVaga").get_text(strip=True)
-            except Exception:
-                senioridade = "Não informado"
-
-            try:
-                localizacao = card.find("div", class_="vaga-local").get_text(separator=" ", strip=True)
-                localizacao = localizacao.split("A empresa aceita")[0].strip()
-            except Exception:
-                localizacao = "Não informado"
-
-            try:
-                descricao = card.find("div", class_="detalhes").get_text(separator=" ", strip=True)
-            except Exception:
-                descricao = "Não informado"
-
-            try:
-                href = card.find("a", class_="link-detalhes-vaga")["href"]
-                link = "https://www.vagas.com.br" + href
-            except Exception:
-                link = None
-
-            # Ignora vagas sem link (campo único no banco — não seriam salvas)
-            if not link:
+            if not titulo or not href:
+                cards_invalidos += 1
                 continue
 
-            vagas.append(JobSchema(
-                titulo      = titulo,
-                empresa     = empresa,
-                senioridade = senioridade,
-                localizacao = localizacao,
-                descricao   = descricao,
-                link        = link,
-                origem      = "Vagas.com",
-            ))
+            empresa_el = card.select_one(VAGAS_COMPANY)
+            empresa = (
+                empresa_el.get_text(" ", strip=True)
+                if empresa_el
+                else "Não informado"
+            )
 
-        return vagas
+            senioridade_el = card.select_one(VAGAS_SENIORITY)
+            senioridade = (
+                senioridade_el.get_text(" ", strip=True)
+                if senioridade_el
+                else "Não informado"
+            )
+
+            localizacao_el = card.select_one(VAGAS_LOCATION)
+            localizacao = (
+                localizacao_el.get_text(" ", strip=True)
+                if localizacao_el
+                else "Não informado"
+            )
+            localizacao = localizacao.split("A empresa aceita")[0].strip()
+
+            descricao_el = card.select_one(VAGAS_DESCRIPTION)
+            descricao = (
+                descricao_el.get_text(" ", strip=True)
+                if descricao_el
+                else "Não informado"
+            )
+
+            vagas.append(
+                JobSchema(
+                    titulo=titulo,
+                    empresa=empresa or "Não informado",
+                    senioridade=senioridade or "Não informado",
+                    localizacao=localizacao or "Não informado",
+                    descricao=descricao or "Não informado",
+                    link=urljoin("https://www.vagas.com.br/", href),
+                    origem=cls.SOURCE,
+                )
+            )
+
+        return vagas, cards_invalidos, len(cards)

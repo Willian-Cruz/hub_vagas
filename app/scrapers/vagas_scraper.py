@@ -21,7 +21,10 @@ class VagasScraper(BaseScraper):
     """Scraper para vagas.com.br, que carrega resultados com infinite scroll."""
 
     SOURCE = "Vagas.com"
-    URL = "https://www.vagas.com.br/vagas-de-engenheiro-de-dados"
+    URL = (
+        "https://www.vagas.com.br/vagas-de-engenheiro-de-dados"
+        "?ordenar_por=mais_recentes"
+    )
     MAX_PAGES = 20  # máximo de scrolls após o carregamento da página inicial
     RESULTS_WAIT_MS = 10_000
     NEW_RESULTS_WAIT_MS = 6_000
@@ -178,6 +181,7 @@ class VagasScraper(BaseScraper):
         cards = soup.select(VAGAS_JOB_CARD)
         vagas: list[JobSchema] = []
         cards_invalidos = 0
+        links_vistos = set()
 
         for card in cards:
             titulo_el = card.select_one(VAGAS_TITLE)
@@ -218,6 +222,11 @@ class VagasScraper(BaseScraper):
                 else "Não informado"
             )
 
+            link = urljoin("https://www.vagas.com.br/", href)
+            if link in links_vistos:
+                continue
+            links_vistos.add(link)
+
             vagas.append(
                 JobSchema(
                     titulo=titulo,
@@ -225,7 +234,7 @@ class VagasScraper(BaseScraper):
                     senioridade=senioridade or "Não informado",
                     localizacao=localizacao or "Não informado",
                     descricao=descricao or "Não informado",
-                    link=urljoin("https://www.vagas.com.br/", href),
+                    link=link,
                     origem=cls.SOURCE,
                 )
             )

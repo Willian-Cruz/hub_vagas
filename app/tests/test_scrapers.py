@@ -299,13 +299,15 @@ class TestInfoJobsScraperColetar:
         with patch(
             "scrapers.infojobs_scraper.requests.get",
             return_value=_infojobs_response(INFOJOBS_HTML_MULTIPLAS),
-        ):
+        ) as get:
             resultado = InfoJobsScraper.coletar()
 
         assert resultado.status is ScrapeStatus.SUCCESS
         assert len(resultado.jobs) == 2
         assert resultado.pages_processed == 1
         assert resultado.error is None
+        assert "campo=griddate" in get.call_args.args[0]
+        assert "orden=desc" in get.call_args.args[0]
 
     def test_html_com_estado_vazio_explicito(self, monkeypatch):
         monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 3)
@@ -360,6 +362,20 @@ class TestInfoJobsScraperColetar:
         assert resultado.pages_processed == 1
         assert "Timeout" in resultado.error
 
+    def test_paginacao_para_quando_a_pagina_repete_os_mesmos_links(self, monkeypatch):
+        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 3)
+        monkeypatch.setattr("scrapers.infojobs_scraper.time.sleep", lambda *_: None)
+        with patch(
+            "scrapers.infojobs_scraper.requests.get",
+            return_value=_infojobs_response(INFOJOBS_HTML_UMA_VAGA),
+        ) as get:
+            resultado = InfoJobsScraper.coletar()
+
+        assert resultado.status is ScrapeStatus.SUCCESS
+        assert len(resultado.jobs) == 1
+        assert resultado.pages_processed == 2
+        assert get.call_count == 2
+
     def test_usa_bundle_ca_configurado_sem_desativar_tls(self, monkeypatch):
         monkeypatch.setenv("REQUESTS_CA_BUNDLE", "C:/certs/proxy-ca.pem")
         monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
@@ -399,6 +415,7 @@ class TestVagasScraperColetar:
         assert resultado.status is ScrapeStatus.SUCCESS
         assert len(resultado.jobs) == 1
         assert resultado.pages_processed == 1
+        assert "ordenar_por=mais_recentes" in VagasScraper.URL
         page.goto.assert_called_once_with(
             VagasScraper.URL,
             timeout=VagasScraper.NAVIGATION_TIMEOUT_MS,
@@ -436,6 +453,11 @@ class TestVagasScraperColetar:
         resultado = VagasScraper._parsear(html)
         assert resultado[0].link == "https://carreiras.example/vagas/1234"
 
+    def test_parser_remove_cards_com_link_repetido(self):
+        resultado = VagasScraper._parsear(VAGAS_HTML_UMA_VAGA + VAGAS_HTML_UMA_VAGA)
+
+        assert len(resultado) == 1
+
 
 def test_gupy_retorna_scrape_result_e_fecha_browser(monkeypatch):
     vaga = JobSchema(
@@ -463,4 +485,22 @@ def test_gupy_retorna_scrape_result_e_fecha_browser(monkeypatch):
     assert resultado.jobs == [vaga]
     assert resultado.pages_processed == 1
     assert GupyScraper.HEADLESS is True
+    assert "workplaceTypes" not in GupyScraper.BASE_URL
     browser.close.assert_called_once()
+
+
+def test_gupy_espera_novas_vagas_com_locator_sem_injetar_javascript(monkeypatch):
+    page = MagicMock()
+    page.locator.return_value.count.return_value = 2
+    page.locator.return_value.nth.return_value.wait_for.return_value = None
+    page.content.return_value = "<html></html>"
+    monkeypatch.setattr(GupyScraper, "MAX_PAGES", 1)
+
+    html = GupyScraper._carregar_pagina(
+        page, "https://portal.gupy.io/job-search/term=data"
+    )
+
+    assert html == "<html></html>"
+    page.mouse.wheel.assert_called_once_with(0, 2_000)
+    page.locator.return_value.nth.assert_called_once_with(2)
+    page.evaluate.assert_not_called()

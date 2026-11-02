@@ -37,16 +37,12 @@ class GupyScraper(BaseScraper):
         exato quebraria em pouco tempo. O nível 2 usa o único padrão
         realmente estável: a URL da vaga sempre segue /jobs/<id>.
 
-    IMPORTANTE — isto não foi testado contra o site real:
-        gupy.io não está na allowlist de rede do sandbox onde este código
-        foi escrito, então não consegui abrir o portal e conferir o DOM de
-        verdade. Rode localmente com HEADLESS = False, abra o DevTools em
-        cima de um card de vaga e me mande a estrutura — ajusto o Nível 1
-        num segundo. O Nível 2 garante que a coleta não fica zerada nesse
-        meio tempo.
+    A Gupy pode alterar o DOM e a ordenação do portal. O parser mantém um
+    fallback baseado no padrão dos links, mas os resultados devem ser
+    monitorados para identificar mudanças na busca e nos cards.
     """
 
-    BASE_URL = "https://portal.gupy.io/job-search/term={termo}&workplaceTypes[]=remote"
+    BASE_URL = "https://portal.gupy.io/job-search/term={termo}"
     SOURCE = "Gupy"
 
     # Termos cobrindo o perfil (analista de dados → engenharia de dados).
@@ -85,7 +81,7 @@ class GupyScraper(BaseScraper):
 
                     for termo in cls.TERMOS_BUSCA:
                         url = cls.BASE_URL.format(termo=quote(termo))
-                        cls._log(f"Buscando termo '{termo}' → {url}")
+                        cls._log(f"Buscando termo '{termo}' -> {url}")
 
                         try:
                             html = cls._carregar_pagina(page, url)
@@ -146,14 +142,13 @@ class GupyScraper(BaseScraper):
                 return page.content()
 
         while scroll_count < cls.MAX_PAGES:
-
-            links_antes = len(page.query_selector_all(seletor_link))
-
-            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            links = page.locator(seletor_link)
+            links_antes = links.count()
+            page.mouse.wheel(0, 2_000)
 
             try:
-                page.wait_for_function(
-                    f"document.querySelectorAll(\"{seletor_link}\").length > {links_antes}",
+                links.nth(links_antes).wait_for(
+                    state="attached",
                     timeout=6_000,
                 )
                 sem_novidade = 0

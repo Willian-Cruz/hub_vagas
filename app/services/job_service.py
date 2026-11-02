@@ -1,4 +1,4 @@
-from database.connection import Sessionlocal
+from database.connection import SessionLocal
 from database.job_model import Job
 
 class JobService:
@@ -6,7 +6,7 @@ class JobService:
     @staticmethod
     def salvar(vaga):
         
-        session = Sessionlocal()
+        session = SessionLocal()
 
         try:
             job=Job(

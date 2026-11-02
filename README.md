@@ -143,6 +143,13 @@ e depois cria as tabelas. O usuário PostgreSQL configurado precisa ter o
 privilégio `CREATEDB`. Em uma conexão remota via `DATABASE_URL`, crie o banco
 no provedor antes de executar o pipeline.
 
+`create_all()` não altera tabelas já existentes. Para bancos criados por versões
+anteriores, aplique as migrações de `infra/migrations` em ordem. A migração `001`
+adiciona a chave da tabela de associação e interrompe se encontrar pares
+duplicados. A migração `002` adiciona `jobs.data_coleta`; vagas antigas recebem
+como data de coleta o momento da migração, pois a versão anterior não guardava
+esse timestamp.
+
 ### 3. Pipeline
 
 ```bash
@@ -187,7 +194,7 @@ cd app
 pytest tests/ -v
 ```
 
-A suíte usa um mock global do banco (`conftest.py`), então roda sem PostgreSQL. São 133 testes em 9 arquivos, cobrindo scrapers, normalização, salário, analytics, repositório, pipeline, agendamento, exportação e configuração. O GitHub Actions executa tudo a cada push e pull request na `main`.
+A suíte usa um mock global do banco (`conftest.py`), então roda sem PostgreSQL. Os testes cobrem scrapers, normalização, salário, analytics, repositórios, pipeline, agendamento, exportação e configuração. Instale as dependências com `pip install -r requirements.txt` antes de executá-los. O GitHub Actions roda a suíte a cada push e pull request na `main`.
 
 ---
 

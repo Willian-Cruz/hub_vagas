@@ -22,6 +22,14 @@ class BrokenScraper:
         raise RuntimeError("falha simulada")
 
 
+class LegacyScraper:
+    SOURCE = "FonteLegada"
+
+    @classmethod
+    def coletar(cls):
+        return []
+
+
 def test_coletor_preserva_status_de_cada_fonte(monkeypatch):
     monkeypatch.setattr(CollectorService, "SCRAPERS", [FakeScraper])
 
@@ -42,3 +50,12 @@ def test_coletor_converte_excecao_em_resultado_failed(monkeypatch):
     assert resultados[0].source == "FonteQuebrada"
     assert resultados[0].status is ScrapeStatus.FAILED
     assert "falha simulada" in resultados[0].error
+
+
+def test_coletor_sinaliza_scraper_fora_do_contrato(monkeypatch):
+    monkeypatch.setattr(CollectorService, "SCRAPERS", [LegacyScraper])
+
+    resultados = CollectorService.coletar_resultados()
+
+    assert resultados[0].status is ScrapeStatus.FAILED
+    assert "deve retornar ScrapeResult" in resultados[0].error

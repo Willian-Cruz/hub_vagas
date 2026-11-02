@@ -1,21 +1,27 @@
-from database.connection import engine
-from database.models import base
-from database.job_model import Job
-from database.tech_model import Technology
-from database.job_tech_model import job_technologies
-from services.collector_service import CollectorService
-from repositories.job_repository import JobRepository
+import os
+import sys
 
-base.metadata.create_all(bind=engine)
 
-print("Banco criado com sucesso!")
+def main() -> int:
+    # Mantém `python app/main.py` compatível com os imports internos do projeto.
+    sys.path.insert(0, os.path.dirname(__file__))
 
-vagas = CollectorService.coletar_todas_vagas()
+    from database.connection import engine, ensure_local_database_exists
+    from database.models import base
+    from database.job_model import Job  # registra o modelo no metadata
+    from database.tech_model import Technology  # registra o modelo no metadata
+    from database.job_tech_model import job_technologies  # registra a associação
+    from services.pipeline_service import PipelineService
 
-print(f"\nTotal coletado: " f"{len(vagas)} vagas\n")
+    if ensure_local_database_exists():
+        print("Banco local criado com sucesso!")
 
-for vaga in vagas:
+    base.metadata.create_all(bind=engine)
+    print("Banco verificado/criado com sucesso!")
 
-    JobRepository.salvar(vaga)
+    metricas = PipelineService.executar()
+    return 0 if metricas["sucesso"] else 1
 
-ls 
+
+if __name__ == "__main__":
+    raise SystemExit(main())

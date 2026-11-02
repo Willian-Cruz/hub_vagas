@@ -14,6 +14,7 @@ Suporta dois modos de conexão:
 """
 
 from dotenv import load_dotenv
+from sqlalchemy.engine import URL
 import os
 
 load_dotenv(encoding="utf-8")
@@ -29,6 +30,7 @@ DB_NAME = os.getenv("DB_NAME")
 # No Cloud Run, essa variável é injetada automaticamente pelo Secret Manager.
 # Localmente, pode ser definida no .env ou montada a partir das variáveis acima.
 DATABASE_URL = os.getenv("DATABASE_URL")
+LOCAL_DATABASE_CONFIG = DATABASE_URL is None
 
 if DATABASE_URL is None:
 
@@ -36,11 +38,13 @@ if DATABASE_URL is None:
 
         raise RuntimeError("Configure DATABASE_URL " "ou as variáveis DB_*.")
 
-    DATABASE_URL = (
-        f"postgresql://"
-        f"{DB_USER}:{DB_PASSWORD}"
-        f"@{DB_HOST}:{DB_PORT}"
-        f"/{DB_NAME}"
+    DATABASE_URL = URL.create(
+        drivername="postgresql+psycopg",
+        username=DB_USER,
+        password=DB_PASSWORD,
+        host=DB_HOST,
+        port=int(DB_PORT),
+        database=DB_NAME,
     )
 
 # ── GitHub Pages — URL base do dashboard publicado ───────────────────────────

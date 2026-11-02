@@ -18,6 +18,7 @@ from utils.logger import get_logger
 from services.collector_service import CollectorService
 from repositories.job_repository import JobRepository
 from services.dashboard_service import DashboardService
+from scrapers.base_scraper import ScrapeStatus
 
 logger = get_logger(__name__)
 
@@ -36,8 +37,9 @@ class PipelineService:
                 "salvas":      int,   # vagas efetivamente inseridas no banco
                 "duplicadas":  int,   # vagas ignoradas por já existirem
                 "erros":       int,   # vagas que falharam ao salvar
+                "fontes":      list,  # status, contagem e erro por scraper
                 "duracao_seg": float, # tempo total em segundos
-                "sucesso":     bool,  # False se houve exceção geral
+                "sucesso":     bool,  # False se coleta, persistência ou dashboard falhar
             }
         """
         logger.info("=" * 60)
@@ -49,6 +51,7 @@ class PipelineService:
             "salvas":      0,
             "duplicadas":  0,
             "erros":       0,
+            "fontes":      [],
             "duracao_seg": 0.0,
             "sucesso":     False,
         }
@@ -58,9 +61,34 @@ class PipelineService:
         try:
             # ── 1. Coleta ──────────────────────────────────────────────
             logger.info("Etapa 1/3: Coletando vagas...")
-            vagas = CollectorService.coletar_todas_vagas()
+            resultados = CollectorService.coletar_resultados()
+            metricas["fontes"] = [
+                {
+                    "origem": resultado.source,
+                    "status": resultado.status.value,
+                    "vagas": len(resultado.jobs),
+                    "paginas": resultado.pages_processed,
+                    "erro": resultado.error,
+                }
+                for resultado in resultados
+            ]
+            vagas = [vaga for resultado in resultados for vaga in resultado.jobs]
             metricas["coletadas"] = len(vagas)
             logger.info(f"Coletadas: {len(vagas)} vagas")
+
+            fontes_com_falha = [
+                resultado
+                for resultado in resultados
+                if resultado.status not in (ScrapeStatus.SUCCESS, ScrapeStatus.EMPTY)
+            ]
+            for resultado in resultados:
+                logger.info(
+                    f"Fonte {resultado.source}: {resultado.status.value} | "
+                    f"Vagas: {len(resultado.jobs)} | "
+                    f"Páginas: {resultado.pages_processed}"
+                )
+                if resultado.error:
+                    logger.warning(f"Fonte {resultado.source}: {resultado.error}")
 
             # ── 2. Persistência ────────────────────────────────────────
             logger.info("Etapa 2/3: Persistindo no banco...")
@@ -87,7 +115,12 @@ class PipelineService:
             DashboardService.gerar()
             logger.info("Dashboard atualizado com sucesso")
 
-            metricas["sucesso"] = True
+            metricas["sucesso"] = metricas["erros"] == 0 and not fontes_com_falha
+
+            if metricas["erros"] or fontes_com_falha:
+                logger.warning(
+                    "Pipeline concluído com falhas em coleta ou persistência"
+                )
 
         except Exception as e:
             logger.error(f"Erro crítico no pipeline: {e}", exc_info=True)

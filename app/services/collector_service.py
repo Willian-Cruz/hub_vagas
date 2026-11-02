@@ -1,55 +1,51 @@
-import time
-from scrapers.vagas_scraper import VagasScraper
+from time import perf_counter
+
+from scrapers.base_scraper import ScrapeResult, ScrapeStatus
 from scrapers.infojobs_scraper import InfoJobsScraper
+from scrapers.vagas_scraper import VagasScraper
 
 
 class CollectorService:
-    """
-    Orquestra a execução de todos os scrapers.
-
-    Responsabilidades:
-        - Chamar cada scraper em sequência
-        - Medir o tempo de coleta de cada um
-        - Logar erros sem interromper os demais scrapers
-        - Retornar a lista consolidada de vagas
-    """
+    """Executa os scrapers e preserva um resultado por fonte."""
 
     SCRAPERS = [VagasScraper, InfoJobsScraper]
 
     @classmethod
-    def coletar_todas_vagas(cls) -> list:
-
-        todas_vagas = []
+    def coletar_resultados(cls) -> list[ScrapeResult]:
+        resultados: list[ScrapeResult] = []
 
         for scraper in cls.SCRAPERS:
-
-            print(f"\n{'─' * 50}")
-            print(f"Iniciando: {scraper.__name__}")
-            print(f"{'─' * 50}")
-
-            inicio = time.time()
-
+            inicio = perf_counter()
             try:
                 resultado = scraper.coletar()
-                duracao   = time.time() - inicio
-
-                print(
-                    f"\n✔ {scraper.__name__}: "
-                    f"{len(resultado)} vagas coletadas "
-                    f"em {duracao:.1f}s"
-                )
-
-                todas_vagas.extend(resultado)
-
+                if not isinstance(resultado, ScrapeResult):
+                    raise TypeError(
+                        f"{scraper.__name__}.coletar() deve retornar ScrapeResult"
+                    )
             except Exception as erro:
-                duracao = time.time() - inicio
-                print(
-                    f"\n✘ {scraper.__name__} falhou "
-                    f"após {duracao:.1f}s: {erro}"
+                resultado = ScrapeResult(
+                    source=getattr(scraper, "SOURCE", scraper.__name__),
+                    status=ScrapeStatus.FAILED,
+                    error=f"{type(erro).__name__}: {erro}",
                 )
 
-        print(f"\n{'═' * 50}")
-        print(f"Total geral: {len(todas_vagas)} vagas coletadas")
-        print(f"{'═' * 50}\n")
+            duracao = perf_counter() - inicio
+            resultados.append(resultado)
+            print(
+                f"[{resultado.source}] {resultado.status.value}: "
+                f"{len(resultado.jobs)} vaga(s), "
+                f"{resultado.pages_processed} página(s), {duracao:.1f}s"
+            )
+            if resultado.error:
+                print(f"[{resultado.source}] Detalhe: {resultado.error}")
 
-        return todas_vagas
+        return resultados
+
+    @classmethod
+    def coletar_todas_vagas(cls) -> list:
+        """Compatibilidade para chamadores que precisam somente das vagas."""
+        return [
+            vaga
+            for resultado in cls.coletar_resultados()
+            for vaga in resultado.jobs
+        ]

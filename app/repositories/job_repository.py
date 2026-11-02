@@ -19,7 +19,7 @@ class JobRepository:
 
             if vaga_existente:
                 print(f"Vaga já existe: {vaga.titulo}")
-                return
+                return "duplicada"
 
             # ── Sprint 5: normalização antes de salvar ────────────────
 
@@ -71,10 +71,12 @@ class JobRepository:
                 f"Local: {localizacao_norm} | "
                 f"Salário: {salario}"
             )
+            return "salva"
 
         except Exception as e:
             session.rollback()
             print(f"Erro ao salvar vaga: {e}")
+            return "erro"
 
         finally:
             session.close()

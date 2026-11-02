@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database.models import base
 from database.job_tech_model import job_technologies
@@ -16,6 +17,7 @@ class Job(base):
     salario = Column(String)
     link = Column(String, unique=True, nullable=False)
     origem = Column(String)
+    data_coleta = Column(DateTime, server_default=func.now(), nullable=False)
 
     technologies = relationship(
         "Technology", 

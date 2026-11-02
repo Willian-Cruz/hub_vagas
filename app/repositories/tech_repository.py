@@ -1,4 +1,4 @@
-from database.models import Technology
+from database.tech_model import Technology
 from database.connection import SessionLocal
 
 

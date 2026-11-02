@@ -25,6 +25,7 @@ class InfoJobsScraper(BaseScraper):
     BASE_URL = (
         "https://www.infojobs.com.br/"
         "empregos.aspx?palabra=engenheiro%20de%20dados&page={page}"
+        "&campo=griddate&im=1&orden=desc"
     )
     MAX_PAGES = 10
     TIMEOUT = (10, 30)
@@ -43,6 +44,7 @@ class InfoJobsScraper(BaseScraper):
         paginas_processadas = 0
         cards_invalidos = 0
         erro_coleta = None
+        links_vistos: set[str] = set()
 
         # Requests mantém TLS habilitado. Em redes com proxy, a CA confiável
         # pode ser informada por REQUESTS_CA_BUNDLE ou CURL_CA_BUNDLE.
@@ -87,8 +89,21 @@ class InfoJobsScraper(BaseScraper):
                     )
                 break
 
-            todas_vagas.extend(vagas_pagina)
-            cls._log(f"Página {page_num}: {len(vagas_pagina)} vaga(s)")
+            vagas_novas = [
+                vaga for vaga in vagas_pagina if vaga.link not in links_vistos
+            ]
+            if not vagas_novas:
+                cls._log(
+                    f"Página {page_num} repetiu links anteriores; encerrando paginação."
+                )
+                break
+
+            links_vistos.update(vaga.link for vaga in vagas_novas)
+            todas_vagas.extend(vagas_novas)
+            cls._log(
+                f"Página {page_num}: {len(vagas_novas)} vaga(s) nova(s) "
+                f"de {len(vagas_pagina)} card(s)"
+            )
 
             if page_num < cls.MAX_PAGES:
                 time.sleep(1)

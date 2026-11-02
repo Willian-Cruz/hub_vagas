@@ -272,6 +272,15 @@ DB_PORT=5432
 DB_NAME=job_market
 ```
 
+Se o InfoJobs não conseguir validar o certificado TLS em uma rede com proxy
+corporativo, configure `REQUESTS_CA_BUNDLE` com o caminho do certificado CA
+fornecido pela rede. A validação TLS continua habilitada.
+
+Na configuração local (`DB_*`), `main.py` cria o banco se ele ainda não existir
+e depois cria as tabelas. O usuário PostgreSQL configurado precisa ter o
+privilégio `CREATEDB`. Em uma conexão remota via `DATABASE_URL`, crie o banco
+no provedor antes de executar o pipeline.
+
 ---
 
 ## ▶️ Executando o Projeto

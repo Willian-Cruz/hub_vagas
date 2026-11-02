@@ -142,8 +142,7 @@ class TestExecutarPipeline:
             "coletadas": 10, "salvas": 8, "duplicadas": 2,
             "erros": 0, "duracao_seg": 5.0, "sucesso": True,
         }
-        with patch("services.pipeline_service.CollectorService.coletar_todas_vagas", return_value=[]), \
-             patch("services.pipeline_service.DashboardService.gerar"):
+        with patch("services.pipeline_service.CollectorService.coletar_todas_vagas", return_value=[]):
             SchedulerService._executar_pipeline()
         # Se chegou aqui sem exceção, o pipeline foi chamado com sucesso
 

@@ -1,15 +1,36 @@
+from datetime import datetime
+
+from sqlalchemy.exc import IntegrityError
+
 from database.connection import SessionLocal
 from database.job_model import Job
 from database.tech_model import Technology
 from services.tech_service import TechnologyService
 from services.normalize_service import NormalizeService
 from services.salary_service import SalaryService
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+# Resultados possíveis de JobRepository.salvar().
+# O PipelineService usa esses valores para montar as métricas da execução.
+SALVA = "salva"
+DUPLICADA = "duplicada"
+ERRO = "erro"
 
 
 class JobRepository:
 
     @staticmethod
-    def salvar(vaga):
+    def salvar(vaga) -> str:
+        """
+        Persiste uma vaga normalizada, com as tecnologias extraídas da descrição.
+
+        Returns:
+            "salva"      — a vaga foi inserida
+            "duplicada"  — já existia uma vaga com o mesmo link
+            "erro"       — falha ao salvar (a transação sofre rollback)
+        """
 
         session = SessionLocal()
 
@@ -40,6 +61,7 @@ class JobRepository:
                 salario=salario,
                 link=vaga.link,
                 origem=vaga.origem,
+                data_coleta=datetime.now(),
             )
 
             session.add(nova_vaga)
@@ -65,9 +87,9 @@ class JobRepository:
             session.add(nova_vaga)
             session.commit()
 
-            print(
+            logger.info(
                 f"Salva: {vaga.titulo} | "
-                f"Senior: {senioridade_norm} | "
+                f"Senioridade: {senioridade_norm} | "
                 f"Local: {localizacao_norm} | "
                 f"Salário: {salario}"
             )

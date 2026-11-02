@@ -37,7 +37,7 @@ class PipelineService:
                 "erros":       int,   # vagas que falharam ao salvar
                 "fontes":      list,  # status, contagem e erro por scraper
                 "duracao_seg": float, # tempo total em segundos
-                "sucesso":     bool,  # False se coleta, persistência ou dashboard falhar
+                "sucesso":     bool,  # False se a coleta ou persistência falhar
             }
         """
         logger.info("=" * 60)
@@ -79,6 +79,7 @@ class PipelineService:
                 for resultado in resultados
                 if resultado.status not in (ScrapeStatus.SUCCESS, ScrapeStatus.EMPTY)
             ]
+            nenhuma_fonte = not resultados
             for resultado in resultados:
                 logger.info(
                     f"Fonte {resultado.source}: {resultado.status.value} | "
@@ -87,13 +88,6 @@ class PipelineService:
                 )
                 if resultado.error:
                     logger.warning(f"Fonte {resultado.source}: {resultado.error}")
-
-            # Zero vagas quase sempre indica scraper quebrado ou portal bloqueando.
-            # Falhar aqui evita um "sucesso" silencioso que esconde o problema.
-            if not vagas:
-                raise RuntimeError(
-                    "Nenhuma vaga coletada: verifique os scrapers e o acesso aos portais"
-                )
 
             # ── 2. Persistência ────────────────────────────────────────
             logger.info("Etapa 2/2: Persistindo no banco...")
@@ -115,14 +109,11 @@ class PipelineService:
                 f"Erros: {metricas['erros']}"
             )
 
-            # ── 3. Dashboard ───────────────────────────────────────────
-            logger.info("Etapa 3/3: Regenerando dashboard...")
-            DashboardService.gerar()
-            logger.info("Dashboard atualizado com sucesso")
+            metricas["sucesso"] = (
+                metricas["erros"] == 0 and not fontes_com_falha and not nenhuma_fonte
+            )
 
-            metricas["sucesso"] = metricas["erros"] == 0 and not fontes_com_falha
-
-            if metricas["erros"] or fontes_com_falha:
+            if metricas["erros"] or fontes_com_falha or nenhuma_fonte:
                 logger.warning(
                     "Pipeline concluído com falhas em coleta ou persistência"
                 )

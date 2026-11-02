@@ -4,7 +4,7 @@ from urllib.parse import quote, urlparse
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 from bs4 import BeautifulSoup
 from schemas.job_schema import JobSchema
-from scrapers.base_scraper import BaseScraper
+from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
 
 
 class GupyScraper(BaseScraper):
@@ -47,6 +47,7 @@ class GupyScraper(BaseScraper):
     """
 
     BASE_URL = "https://portal.gupy.io/job-search/term={termo}&workplaceTypes[]=remote"
+    SOURCE = "Gupy"
 
     # Termos cobrindo o perfil (analista de dados → engenharia de dados).
     # Adicione/remova termos aqui conforme o que você quiser rastrear.
@@ -57,8 +58,7 @@ class GupyScraper(BaseScraper):
     ]
 
     MAX_PAGES = 20     # scrolls por termo de busca
-    HEADLESS  = False   # troque para False se a Gupy bloquear como bot
-                        # (foi preciso no passado com outro portal do projeto)
+    HEADLESS = True
 
     JOB_LINK_PATTERN = re.compile(r"https?://[\w.-]+\.gupy\.io/jobs/\d+")
 
@@ -71,39 +71,61 @@ class GupyScraper(BaseScraper):
     # ── Coleta ───────────────────────────────────────────────────────────
 
     @classmethod
-    def coletar(cls) -> list:
+    def coletar(cls) -> ScrapeResult:
+        vagas_por_link = {}
+        erros = []
+        buscas_processadas = 0
+        browser = None
 
-        vagas_por_link = {}  # dedupe entre os termos de busca (chave = link)
-
-        with sync_playwright() as p:
-
-            browser = p.chromium.launch(headless=cls.HEADLESS)
-            page    = browser.new_page()
-
-            for termo in cls.TERMOS_BUSCA:
-
-                url = cls.BASE_URL.format(termo=quote(termo))
-                cls._log(f"Buscando termo '{termo}' → {url}")
-
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=cls.HEADLESS)
                 try:
-                    html        = cls._carregar_pagina(page, url)
-                    vagas_termo = cls._parsear(html)
+                    page = browser.new_page()
 
-                    cls._log(f"Termo '{termo}': {len(vagas_termo)} vagas")
+                    for termo in cls.TERMOS_BUSCA:
+                        url = cls.BASE_URL.format(termo=quote(termo))
+                        cls._log(f"Buscando termo '{termo}' → {url}")
 
-                    for vaga in vagas_termo:
-                        vagas_por_link[vaga.link] = vaga
+                        try:
+                            html = cls._carregar_pagina(page, url)
+                            buscas_processadas += 1
+                            vagas_termo = cls._parsear(html)
+                            cls._log(
+                                f"Termo '{termo}': {len(vagas_termo)} vagas"
+                            )
 
-                except Exception as e:
-                    cls._log(f"Erro buscando '{termo}': {e}")
+                            for vaga in vagas_termo:
+                                vagas_por_link[vaga.link] = vaga
+                        except Exception as erro:
+                            erros.append(f"{termo}: {erro}")
+                            cls._log(f"Erro buscando '{termo}': {erro}")
 
-                time.sleep(1)  # pausa entre termos, não sobrecarrega o portal
-
-            browser.close()
+                        time.sleep(1)
+                finally:
+                    if browser is not None:
+                        browser.close()
+        except Exception as erro:
+            erros.append(str(erro))
 
         vagas = list(vagas_por_link.values())
-        cls._log(f"Total coletado: {len(vagas)} vagas")
-        return vagas
+        if erros:
+            status = ScrapeStatus.PARTIAL if vagas else ScrapeStatus.FAILED
+        else:
+            status = ScrapeStatus.SUCCESS if vagas else ScrapeStatus.EMPTY
+
+        resultado = ScrapeResult(
+            source=cls.SOURCE,
+            status=status,
+            jobs=vagas,
+            pages_processed=buscas_processadas,
+            error="; ".join(erros) if erros else None,
+        )
+        cls._log(
+            f"Coleta concluída: status={resultado.status.value}, "
+            f"vagas={len(resultado.jobs)}, buscas={resultado.pages_processed}"
+        )
+        return resultado
 
     # ── Carregamento (infinite scroll) ──────────────────────────────────
 
@@ -111,13 +133,17 @@ class GupyScraper(BaseScraper):
     def _carregar_pagina(cls, page, url: str) -> str:
         """Abre a URL e rola até parar de carregar novas vagas."""
 
-        page.goto(url, timeout=40_000)
-        page.wait_for_load_state("networkidle", timeout=20_000)
-
         scroll_count      = 0
         sem_novidade      = 0
         MAX_SEM_NOVIDADE  = 3
         seletor_link      = "a[href*='.gupy.io/jobs/']"
+
+        page.goto(url, timeout=40_000, wait_until="domcontentloaded")
+        try:
+            page.wait_for_selector(seletor_link, timeout=12_000)
+        except PlaywrightTimeout:
+            if cls._pagina_sem_resultados(page.content()):
+                return page.content()
 
         while scroll_count < cls.MAX_PAGES:
 

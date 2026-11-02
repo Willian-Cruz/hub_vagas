@@ -1,8 +1,9 @@
 from time import perf_counter
 
 from scrapers.base_scraper import ScrapeResult, ScrapeStatus
-from scrapers.infojobs_scraper import InfoJobsScraper
 from scrapers.gupy_scraper import GupyScraper
+from scrapers.infojobs_scraper import InfoJobsScraper
+from scrapers.vagas_scraper import VagasScraper
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -18,30 +19,53 @@ class CollectorService:
         resultados: list[ScrapeResult] = []
 
         for scraper in cls.SCRAPERS:
-
-            logger.info(f"Iniciando: {scraper.__name__}")
-
-            inicio = time.time()
+            fonte = getattr(scraper, "SOURCE", scraper.__name__)
+            inicio = perf_counter()
+            logger.info("Iniciando scraper: %s", fonte)
 
             try:
                 resultado = scraper.coletar()
-                duracao   = time.time() - inicio
+                if not isinstance(resultado, ScrapeResult):
+                    raise TypeError(
+                        f"{scraper.__name__}.coletar() deve retornar ScrapeResult, "
+                        f"recebido: {type(resultado).__name__}"
+                    )
 
+                resultados.append(resultado)
                 logger.info(
-                    f"{scraper.__name__}: "
-                    f"{len(resultado)} vagas coletadas "
-                    f"em {duracao:.1f}s"
+                    "%s: status=%s, vagas=%d, páginas=%d, duração=%.1fs",
+                    resultado.source,
+                    resultado.status.value,
+                    len(resultado.jobs),
+                    resultado.pages_processed,
+                    perf_counter() - inicio,
                 )
-
-                todas_vagas.extend(resultado)
+                if resultado.error:
+                    logger.warning("%s: %s", resultado.source, resultado.error)
 
             except Exception as erro:
-                duracao = time.time() - inicio
-                logger.error(
-                    f"{scraper.__name__} falhou "
-                    f"após {duracao:.1f}s: {erro}"
+                logger.exception(
+                    "Scraper %s falhou após %.1fs",
+                    fonte,
+                    perf_counter() - inicio,
+                )
+                resultados.append(
+                    ScrapeResult(
+                        source=fonte,
+                        status=ScrapeStatus.FAILED,
+                        error=str(erro),
+                    )
                 )
 
-        logger.info(f"Total geral: {len(todas_vagas)} vagas coletadas")
+        total_vagas = sum(len(resultado.jobs) for resultado in resultados)
+        logger.info("Total coletado: %d vagas em %d fontes", total_vagas, len(resultados))
+        return resultados
 
-        return todas_vagas
+    @classmethod
+    def coletar_todas_vagas(cls):
+        """Compatibilidade para consumidores antigos que esperam somente vagas."""
+        return [
+            vaga
+            for resultado in cls.coletar_resultados()
+            for vaga in resultado.jobs
+        ]

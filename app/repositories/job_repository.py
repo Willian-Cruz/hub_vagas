@@ -19,6 +19,21 @@ DUPLICADA = "duplicada"
 ERRO = "erro"
 
 
+def _violacao_de_link_unico(erro: IntegrityError) -> bool:
+    """Identifica a UNIQUE da URL da vaga sem mascarar outras violações."""
+    origem = getattr(erro, "orig", None)
+    diagnostico = getattr(origem, "diag", None)
+    constraint = getattr(diagnostico, "constraint_name", None)
+    mensagem = f"{erro} {origem}".lower()
+
+    return (
+        constraint in {"jobs_link_key", "uq_jobs_link"}
+        or "jobs.link" in mensagem
+        or "jobs_link_key" in mensagem
+        or "link duplicado" in mensagem
+    )
+
+
 class JobRepository:
 
     @staticmethod
@@ -39,7 +54,7 @@ class JobRepository:
             vaga_existente = session.query(Job).filter(Job.link == vaga.link).first()
 
             if vaga_existente:
-                print(f"Vaga já existe: {vaga.titulo}")
+                logger.info("Vaga já existe: %s", vaga.titulo)
                 return "duplicada"
 
             # ── Sprint 5: normalização antes de salvar ────────────────
@@ -84,7 +99,6 @@ class JobRepository:
 
                 nova_vaga.technologies.append(tecnologia)
 
-            session.add(nova_vaga)
             session.commit()
 
             logger.info(
@@ -95,9 +109,18 @@ class JobRepository:
             )
             return "salva"
 
-        except Exception as e:
+        except IntegrityError as erro:
             session.rollback()
-            print(f"Erro ao salvar vaga: {e}")
+            if _violacao_de_link_unico(erro):
+                logger.info("Vaga duplicada detectada durante o commit: %s", vaga.link)
+                return DUPLICADA
+
+            logger.exception("Violação de integridade ao salvar vaga %s", vaga.link)
+            return ERRO
+
+        except Exception:
+            session.rollback()
+            logger.exception("Erro inesperado ao salvar vaga %s", vaga.link)
             return "erro"
 
         finally:

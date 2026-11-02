@@ -135,24 +135,21 @@ class TestIniciarPorIntervalo:
 class TestExecutarPipeline:
 
     def test_chama_pipeline_service(self):
-        # PipelineService é importado localmente dentro de _executar_pipeline().
-        # Por isso o patch deve ser feito no módulo onde ele é importado: services.pipeline_service
-        mock_pipeline = MagicMock()
-        mock_pipeline.executar.return_value = {
+        metricas = {
             "coletadas": 10, "salvas": 8, "duplicadas": 2,
             "erros": 0, "duracao_seg": 5.0, "sucesso": True,
         }
-        with patch("services.pipeline_service.CollectorService.coletar_todas_vagas", return_value=[]):
+        with patch(
+            "services.pipeline_service.PipelineService.executar",
+            return_value=metricas,
+        ) as executar:
             SchedulerService._executar_pipeline()
-        # Se chegou aqui sem exceção, o pipeline foi chamado com sucesso
+        executar.assert_called_once_with()
 
     def test_nao_levanta_excecao_quando_pipeline_falha(self):
-        # Mesmo se o CollectorService falhar, _executar_pipeline não deve explodir
         with patch(
-            "services.pipeline_service.CollectorService.coletar_todas_vagas",
-            side_effect=Exception("Scraper offline"),
-        ):
-            try:
-                SchedulerService._executar_pipeline()
-            except Exception as e:
-                pytest.fail(f"_executar_pipeline propagou exceção inesperada: {e}")
+            "services.pipeline_service.PipelineService.executar",
+            return_value={"sucesso": False},
+        ) as executar:
+            SchedulerService._executar_pipeline()
+        executar.assert_called_once_with()

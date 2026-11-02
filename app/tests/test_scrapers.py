@@ -435,3 +435,32 @@ class TestVagasScraperColetar:
         )
         resultado = VagasScraper._parsear(html)
         assert resultado[0].link == "https://carreiras.example/vagas/1234"
+
+
+def test_gupy_retorna_scrape_result_e_fecha_browser(monkeypatch):
+    vaga = JobSchema(
+        titulo="Engenheiro de Dados",
+        empresa="Empresa Exemplo",
+        link="https://empresa.gupy.io/jobs/123",
+        origem="Gupy",
+    )
+    playwright = MagicMock()
+    browser = MagicMock()
+    context = MagicMock()
+    context.__enter__.return_value = playwright
+    context.__exit__.return_value = False
+    playwright.chromium.launch.return_value = browser
+    monkeypatch.setattr(GupyScraper, "TERMOS_BUSCA", ["engenheiro de dados"])
+    monkeypatch.setattr("scrapers.gupy_scraper.sync_playwright", lambda: context)
+    monkeypatch.setattr(GupyScraper, "_carregar_pagina", Mock(return_value="html"))
+    monkeypatch.setattr(GupyScraper, "_parsear", Mock(return_value=[vaga]))
+    monkeypatch.setattr("scrapers.gupy_scraper.time.sleep", lambda _seconds: None)
+
+    resultado = GupyScraper.coletar()
+
+    assert resultado.source == "Gupy"
+    assert resultado.status is ScrapeStatus.SUCCESS
+    assert resultado.jobs == [vaga]
+    assert resultado.pages_processed == 1
+    assert GupyScraper.HEADLESS is True
+    browser.close.assert_called_once()

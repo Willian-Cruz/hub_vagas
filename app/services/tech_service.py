@@ -1,3 +1,6 @@
+import re
+
+
 class TechnologyService:
 
     TECNOLOGIAS = [
@@ -33,7 +36,8 @@ class TechnologyService:
 
         for tecnologia in cls.TECNOLOGIAS:
 
-            if tecnologia in descricao:
+            padrao = rf"(?<!\w){re.escape(tecnologia)}(?!\w)"
+            if re.search(padrao, descricao):
 
                 encontradas.append(tecnologia)
 

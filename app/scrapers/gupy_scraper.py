@@ -214,6 +214,7 @@ class GupyScraper(BaseScraper):
                 descricao   = descricao,
                 link        = link,
                 origem      = "Gupy",
+                raw_payload = {"html_fragment": str(card)},
             ))
 
         return vagas
@@ -238,6 +239,7 @@ class GupyScraper(BaseScraper):
                 titulo = pai.get_text(" ", strip=True)[:120] if pai else ""
 
             titulo = titulo or "Não informado"
+            elemento_bruto = link_el.find_parent() or link_el
 
             vagas.append(JobSchema(
                 titulo      = titulo,
@@ -247,6 +249,7 @@ class GupyScraper(BaseScraper):
                 descricao   = "Não informado",
                 link        = link,
                 origem      = "Gupy",
+                raw_payload = {"html_fragment": str(elemento_bruto)},
             ))
 
         return vagas

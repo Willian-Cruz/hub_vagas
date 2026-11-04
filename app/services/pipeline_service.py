@@ -3,8 +3,9 @@ PipelineService — orquestra uma execução completa do pipeline.
 
 Responsabilidades:
     1. Coleta vagas via CollectorService (todos os scrapers)
-    2. Persiste cada vaga via JobRepository (com normalização)
-    3. Registra início, fim, duração e erros no log
+    2. Grava payloads e status de fontes na camada Bronze
+    3. Atualiza a tabela legada `jobs` durante a migração
+    4. Registra início, fim, duração e erros no log
 
 Por que separar do main.py?
     O main.py se torna apenas um ponto de entrada manual.
@@ -13,8 +14,12 @@ Por que separar do main.py?
     Nenhuma lógica duplicada.
 """
 import time
+from datetime import datetime, timezone
+from uuid import uuid4
+
 from utils.logger import get_logger
 from services.collector_service import CollectorService
+from repositories.bronze_repository import BronzeRepository
 from repositories.job_repository import JobRepository
 from scrapers.base_scraper import ScrapeStatus
 
@@ -45,7 +50,10 @@ class PipelineService:
         logger.info("=" * 60)
 
         metricas = {
+            "run_id": None,
             "coletadas":   0,
+            "bronze_salvas": 0,
+            "bronze_ok": False,
             "salvas":      0,
             "duplicadas":  0,
             "erros":       0,
@@ -55,10 +63,13 @@ class PipelineService:
         }
 
         inicio = time.time()
+        inicio_utc = datetime.now(timezone.utc)
+        run_id = uuid4()
+        metricas["run_id"] = str(run_id)
 
         try:
             # ── 1. Coleta ──────────────────────────────────────────────
-            logger.info("Etapa 1/2: Coletando vagas...")
+            logger.info("Etapa 1/3: Coletando vagas...")
             resultados = CollectorService.coletar_resultados()
             metricas["fontes"] = [
                 {
@@ -89,18 +100,38 @@ class PipelineService:
                 if resultado.error:
                     logger.warning(f"Fonte {resultado.source}: {resultado.error}")
 
-            # ── 2. Persistência ────────────────────────────────────────
-            logger.info("Etapa 2/2: Persistindo no banco...")
+            # ── 2. Bronze: snapshot bruto e status de cada fonte ────────
+            logger.info("Etapa 2/3: Gravando observações na camada Bronze...")
+            bronze_ok = False
+            try:
+                metricas["bronze_salvas"] = BronzeRepository.persistir_resultados(
+                    resultados,
+                    run_id=run_id,
+                    started_at=inicio_utc,
+                    finished_at=datetime.now(timezone.utc),
+                )
+                bronze_ok = True
+                metricas["bronze_ok"] = True
+                logger.info(
+                    "Bronze concluída — %d observação(ões)",
+                    metricas["bronze_salvas"],
+                )
+            except Exception:
+                metricas["erros"] += 1
+                logger.exception("Falha ao persistir a camada Bronze")
 
-            for vaga in vagas:
-                resultado = JobRepository.salvar(vaga)
+            # ── 3. Persistência legada durante a transição ─────────────
+            logger.info("Etapa 3/3: Atualizando a tabela legada jobs...")
+            if bronze_ok:
+                for vaga in vagas:
+                    resultado = JobRepository.salvar(vaga)
 
-                if resultado == "salva":
-                    metricas["salvas"] += 1
-                elif resultado == "duplicada":
-                    metricas["duplicadas"] += 1
-                else:
-                    metricas["erros"] += 1
+                    if resultado == "salva":
+                        metricas["salvas"] += 1
+                    elif resultado == "duplicada":
+                        metricas["duplicadas"] += 1
+                    else:
+                        metricas["erros"] += 1
 
             logger.info(
                 f"Persistência concluída — "
@@ -110,7 +141,10 @@ class PipelineService:
             )
 
             metricas["sucesso"] = (
-                metricas["erros"] == 0 and not fontes_com_falha and not nenhuma_fonte
+                bronze_ok
+                and metricas["erros"] == 0
+                and not fontes_com_falha
+                and not nenhuma_fonte
             )
 
             if metricas["erros"] or fontes_com_falha or nenhuma_fonte:
@@ -128,6 +162,7 @@ class PipelineService:
             logger.info(
                 f"PIPELINE {status} em {metricas['duracao_seg']}s | "
                 f"Coletadas: {metricas['coletadas']} | "
+                f"Bronze: {metricas['bronze_salvas']} | "
                 f"Salvas: {metricas['salvas']} | "
                 f"Duplicadas: {metricas['duplicadas']} | "
                 f"Erros: {metricas['erros']}"

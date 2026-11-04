@@ -1,0 +1,41 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: "Snapshots append-only gravados pelos scrapers em PostgreSQL."
+    schema: bronze
+    tables:
+      - name: scrape_runs
+        description: "Status e contagens de cada fonte em cada execução, inclusive coletas vazias."
+        loaded_at_field: finished_at
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 72, period: hour}
+        columns:
+          - name: run_id
+            tests: [not_null]
+          - name: source
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ["Vagas.com", "InfoJobs", "Gupy"]
+          - name: status
+            tests: [not_null]
+      - name: job_observations
+        description: "Payload extraído pelo scraper antes da normalização de negócio."
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: run_id
+            tests: [not_null]
+          - name: source
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ["Vagas.com", "InfoJobs", "Gupy"]
+          - name: source_job_id
+            tests: [not_null]
+          - name: collected_at
+            tests: [not_null]
+          - name: raw_payload
+            tests: [not_null]

@@ -33,6 +33,7 @@ def test_pipeline_registra_falha_da_fonte(monkeypatch):
             "vagas": 0,
             "paginas": 0,
             "erro": "certificado TLS inválido",
+            "descartadas": 0,
         }
     ]
 

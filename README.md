@@ -28,9 +28,10 @@ flowchart LR
 | Etapa | Onde fica | O que faz |
 | --- | --- | --- |
 | Coleta | `app/scrapers/`, `app/services/collector_service.py` | Roda cada scraper em sequência; a falha de um não interrompe os outros |
+| Relevância | `app/services/relevance_service.py` | Descarta, ainda no scraper, vagas cujo **título** não é da área de dados; a contagem de descartadas vai para o log e as métricas |
 | Validação | `app/schemas/job_schema.py` | Garante o formato de cada vaga com Pydantic |
 | Normalização | `app/services/normalize_service.py`, `salary_service.py`, `tech_service.py` | Padroniza senioridade e localização, extrai salário via regex e identifica tecnologias |
-| Persistência | `app/repositories/` | Grava em PostgreSQL; um link já existente é contado como duplicado |
+| Persistência | `app/repositories/` | Grava em PostgreSQL. Duplicada = mesmo link, **ou** mesmo ID no portal (`origem` + `id_externo`), **ou** mesmo conteúdo (`origem` + título + empresa + local, sem acento/caixa). Ao reencontrar uma vaga, só preenche campos que estavam `NULL`; nunca sobrescreve |
 | Orquestração | `app/services/pipeline_service.py`, `app/scheduler.py` | Executa coleta + persistência e registra métricas (coletadas, salvas, duplicadas, erros, duração) |
 | Exportação | `app/services/export_service.py`, `app/export_excel.py` | Gera `data/exports/vagas.xlsx` com as tecnologias agregadas por vaga |
 
@@ -50,6 +51,13 @@ erDiagram
         string salario
         string link UK
         string origem
+        string id_externo "UK com origem"
+        datetime data_publicacao
+        string modalidade
+        string experiencia
+        string escolaridade
+        int qtd_posicoes
+        string chave_conteudo
         datetime data_coleta
     }
     technologies {
@@ -78,13 +86,14 @@ hub_vagas/
 │   ├── schemas/job_schema.py  # validação Pydantic
 │   ├── scrapers/              # base_scraper, vagas_scraper, infojobs_scraper, gupy_scraper
 │   ├── services/              # analytics, collector, export, job, normalize, pipeline,
-│   │                          # salary, scheduler, tech
-│   ├── tests/                 # 9 arquivos de teste + conftest.py (banco mockado)
-│   ├── utils/logger.py        # logging com rotação de arquivo
+│   │                          # relevance, salary, scheduler, tech
+│   ├── tests/                 # testes + conftest.py (banco mockado) + fixtures/ (HTML real dos portais)
+│   ├── utils/                 # logger (rotação de arquivo), text_utils, date_utils
 │   ├── debug_vagas.py         # diagnóstico visual do scraper do Vagas.com
 │   ├── export_excel.py        # ponto de entrada da exportação
 │   ├── main.py                # execução única do pipeline
 │   └── scheduler.py           # execução agendada
+├── infra/migrations/          # SQL para bancos criados por versões anteriores (001 a 003)
 ├── .env.example
 ├── requirements.txt
 └── LICENSE
@@ -96,10 +105,11 @@ hub_vagas/
 
 | Portal | Situação |
 | --- | --- |
-| Vagas.com | Implementado |
-| InfoJobs | Implementado |
+| Vagas.com | Implementado: ID, data de publicação, posições, local, nível e descrição do card |
+| InfoJobs | Implementado: salário, experiência, escolaridade, modalidade, data exata e ID |
 | Gupy | Implementado, com calibração de seletores pendente (`app/scrapers/gupy_scraper.py`) |
-| LinkedIn, Indeed, Glassdoor, Catho | Planejados |
+| Catho, Remotar, Sólides | Próximos (mesmo contrato dos scrapers atuais) |
+| LinkedIn, Indeed, Glassdoor | Planejados |
 
 ## Tecnologias identificadas nas descrições
 
@@ -150,6 +160,22 @@ duplicados. A migração `002` adiciona `jobs.data_coleta`; vagas antigas recebe
 como data de coleta o momento da migração, pois a versão anterior não guardava
 esse timestamp.
 
+A migração `003` (idempotente) adiciona `id_externo`, `data_publicacao`,
+`modalidade`, `experiencia`, `escolaridade`, `qtd_posicoes` e `chave_conteudo`;
+preenche `id_externo` a partir dos links já gravados; troca os textos
+"Não informado", "Confidencial" e "Localização Não Informada" por `NULL`; e cria
+o índice único `(origem, id_externo)`. Ela **interrompe** se houver ID repetido
+no mesmo portal. Faça um `pg_dump` antes de aplicar:
+
+```bash
+pg_dump "$DATABASE_URL" > backup_antes_da_003.sql
+psql "$DATABASE_URL" -f infra/migrations/003_jobs_novos_campos.sql
+```
+
+Campo sem informação é `NULL`, nunca o texto "Não informado". No Power BI, trate
+`NULL` como "(Em branco)". A `data_coleta` de vagas anteriores à migração `002` não
+é confiável (todas recebem o horário da migração); use `data_publicacao`.
+
 ### 3. Pipeline
 
 ```bash
@@ -168,7 +194,7 @@ Exemplo de log:
 ```text
 PIPELINE INICIADO
 Etapa 1/2: Coletando vagas...
-Coletadas: 87 vagas
+Coletadas: 87 vagas | Descartadas (fora do tema): 214
 Etapa 2/2: Persistindo no banco...
 Persistência concluída — Salvas: 54 | Duplicadas: 33 | Erros: 0
 PIPELINE CONCLUÍDO
@@ -194,7 +220,7 @@ cd app
 pytest tests/ -v
 ```
 
-A suíte usa um mock global do banco (`conftest.py`), então roda sem PostgreSQL. Os testes cobrem scrapers, normalização, salário, analytics, repositórios, pipeline, agendamento, exportação e configuração. Instale as dependências com `pip install -r requirements.txt` antes de executá-los. O GitHub Actions roda a suíte a cada push e pull request na `main`.
+A suíte usa um mock global do banco (`conftest.py`), então roda sem PostgreSQL. Os testes cobrem scrapers, normalização, salário, analytics, repositórios (inclusive deduplicação por ID e por conteúdo), relevância, pipeline, agendamento, exportação e configuração. Os parsers do Vagas.com e do InfoJobs também são testados contra **HTML real** dos portais (`app/tests/fixtures/`); quando um portal mudar o layout, salve os cards novos ali e ajuste os testes de `test_parsers_html_real.py`. Instale as dependências com `pip install -r requirements.txt` antes de executá-los. O GitHub Actions roda a suíte a cada push e pull request na `main`.
 
 ---
 
@@ -210,6 +236,7 @@ A suíte usa um mock global do banco (`conftest.py`), então roda sem PostgreSQL
 | 8 | Deploy em Render (Cron Job + PostgreSQL), Docker e dashboard HTML no GitHub Pages |
 | 9 (jun/2026) | Deploy em nuvem e dashboard HTML descontinuados; análise migrada para exportação Excel + Power BI |
 | 10 (out/2026) | Correções de métricas do pipeline, código de saída do `main.py` e testes do repositório |
+| 11 (nov/2026) | Revisão dos scrapers do Vagas.com e InfoJobs com HTML real: campos vazios viram `NULL`, novos campos, filtro de relevância, deduplicação por ID e conteúdo, migração `003` |
 
 ---
 
@@ -217,7 +244,8 @@ A suíte usa um mock global do banco (`conftest.py`), então roda sem PostgreSQL
 
 - Calibrar os seletores do scraper da Gupy
 - Publicar prints do dashboard do Power BI neste README
-- Adicionar novos portais (LinkedIn, Indeed, Glassdoor, Catho)
+- Adicionar Catho, Remotar e Sólides, e depois LinkedIn, Indeed e Glassdoor
+- Buscar a página de detalhe da vaga (descrição completa e salário) nos portais que só mostram um resumo no card
 
 ---
 

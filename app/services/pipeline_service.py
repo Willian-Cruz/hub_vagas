@@ -31,7 +31,8 @@ class PipelineService:
         Returns:
             dict com métricas da execução:
             {
-                "coletadas":   int,   # vagas retornadas pelos scrapers
+                "coletadas":   int,   # vagas do tema retornadas pelos scrapers
+                "descartadas": int,   # vagas fora do tema, descartadas na coleta
                 "salvas":      int,   # vagas efetivamente inseridas no banco
                 "duplicadas":  int,   # vagas ignoradas por já existirem
                 "erros":       int,   # vagas que falharam ao salvar
@@ -46,6 +47,7 @@ class PipelineService:
 
         metricas = {
             "coletadas":   0,
+            "descartadas": 0,
             "salvas":      0,
             "duplicadas":  0,
             "erros":       0,
@@ -67,12 +69,17 @@ class PipelineService:
                     "vagas": len(resultado.jobs),
                     "paginas": resultado.pages_processed,
                     "erro": resultado.error,
+                    "descartadas": resultado.discarded,
                 }
                 for resultado in resultados
             ]
             vagas = [vaga for resultado in resultados for vaga in resultado.jobs]
             metricas["coletadas"] = len(vagas)
-            logger.info(f"Coletadas: {len(vagas)} vagas")
+            metricas["descartadas"] = sum(resultado.discarded for resultado in resultados)
+            logger.info(
+                f"Coletadas: {len(vagas)} vagas | "
+                f"Descartadas (fora do tema): {metricas['descartadas']}"
+            )
 
             fontes_com_falha = [
                 resultado
@@ -128,6 +135,7 @@ class PipelineService:
             logger.info(
                 f"PIPELINE {status} em {metricas['duracao_seg']}s | "
                 f"Coletadas: {metricas['coletadas']} | "
+                f"Descartadas: {metricas['descartadas']} | "
                 f"Salvas: {metricas['salvas']} | "
                 f"Duplicadas: {metricas['duplicadas']} | "
                 f"Erros: {metricas['erros']}"

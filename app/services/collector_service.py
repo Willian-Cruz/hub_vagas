@@ -33,10 +33,11 @@ class CollectorService:
 
                 resultados.append(resultado)
                 logger.info(
-                    "%s: status=%s, vagas=%d, páginas=%d, duração=%.1fs",
+                    "%s: status=%s, vagas=%d, descartadas=%d, páginas=%d, duração=%.1fs",
                     resultado.source,
                     resultado.status.value,
                     len(resultado.jobs),
+                    resultado.discarded,
                     resultado.pages_processed,
                     perf_counter() - inicio,
                 )

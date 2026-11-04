@@ -61,14 +61,18 @@ class AnalyticsService:
     def vagas_por_modalidade(cls) -> pd.DataFrame:
         """
         Distribuição entre Remoto, Híbrido e Presencial.
+        Usa a modalidade informada pelo portal quando existe; senão,
         'Presencial' é inferido: tudo que tem cidade/estado definida.
+        Local NULL (sem informação) fica como 'Não informado'.
         """
         sql = """
             SELECT
                 CASE
-                    WHEN localizacao = 'Remoto'  THEN 'Remoto'
-                    WHEN localizacao = 'Híbrido' THEN 'Híbrido'
-                    WHEN localizacao = 'Não informado' THEN 'Não informado'
+                    WHEN modalidade IS NOT NULL   THEN modalidade
+                    WHEN localizacao = 'Remoto'   THEN 'Remoto'
+                    WHEN localizacao = 'Híbrido'  THEN 'Híbrido'
+                    WHEN localizacao IS NULL
+                      OR localizacao = 'Não informado' THEN 'Não informado'
                     ELSE 'Presencial'
                 END AS label,
                 COUNT(*) AS total

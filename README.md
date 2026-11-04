@@ -69,6 +69,13 @@ erDiagram
         string salario
         string link UK
         string origem
+        string id_externo "UK com origem"
+        datetime data_publicacao
+        string modalidade
+        string experiencia
+        string escolaridade
+        int qtd_posicoes
+        string chave_conteudo
         datetime data_coleta
     }
     technologies {
@@ -97,9 +104,9 @@ hub_vagas/
 │   ├── schemas/job_schema.py  # validação Pydantic
 │   ├── scrapers/              # base_scraper, vagas_scraper, infojobs_scraper, gupy_scraper
 │   ├── services/              # analytics, collector, export, job, normalize, pipeline,
-│   │                          # salary, scheduler, tech
-│   ├── tests/                 # 9 arquivos de teste + conftest.py (banco mockado)
-│   ├── utils/logger.py        # logging com rotação de arquivo
+│   │                          # relevance, salary, scheduler, tech
+│   ├── tests/                 # testes + conftest.py (banco mockado) + fixtures/ (HTML real dos portais)
+│   ├── utils/                 # logger (rotação de arquivo), text_utils, date_utils
 │   ├── debug_vagas.py         # diagnóstico visual do scraper do Vagas.com
 │   ├── export_excel.py        # ponto de entrada da exportação
 │   ├── main.py                # execução única do pipeline
@@ -117,10 +124,11 @@ hub_vagas/
 
 | Portal | Situação |
 | --- | --- |
-| Vagas.com | Implementado |
-| InfoJobs | Implementado |
+| Vagas.com | Implementado: ID, data de publicação, posições, local, nível e descrição do card |
+| InfoJobs | Implementado: salário, experiência, escolaridade, modalidade, data exata e ID |
 | Gupy | Implementado, com calibração de seletores pendente (`app/scrapers/gupy_scraper.py`) |
-| LinkedIn, Indeed, Glassdoor, Catho | Planejados |
+| Catho, Remotar, Sólides | Próximos (mesmo contrato dos scrapers atuais) |
+| LinkedIn, Indeed, Glassdoor | Planejados |
 
 ## Tecnologias identificadas nas descrições
 
@@ -259,6 +267,7 @@ com os modelos. Para verificar a atualização das fontes, execute
 | 8 | Deploy em Render (Cron Job + PostgreSQL), Docker e dashboard HTML no GitHub Pages |
 | 9 (jun/2026) | Deploy em nuvem e dashboard HTML descontinuados; análise migrada para exportação Excel + Power BI |
 | 10 (out/2026) | Correções de métricas do pipeline, código de saída do `main.py` e testes do repositório |
+| 11 (nov/2026) | Revisão dos scrapers do Vagas.com e InfoJobs com HTML real: campos vazios viram `NULL`, novos campos, filtro de relevância, deduplicação por ID e conteúdo, migração `003` |
 
 ---
 
@@ -266,7 +275,8 @@ com os modelos. Para verificar a atualização das fontes, execute
 
 - Calibrar os seletores do scraper da Gupy
 - Publicar prints do dashboard do Power BI neste README
-- Adicionar novos portais (LinkedIn, Indeed, Glassdoor, Catho)
+- Adicionar Catho, Remotar e Sólides, e depois LinkedIn, Indeed e Glassdoor
+- Buscar a página de detalhe da vaga (descrição completa e salário) nos portais que só mostram um resumo no card
 
 ---
 

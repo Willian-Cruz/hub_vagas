@@ -9,7 +9,7 @@ logger = get_logger(__name__)
 
 class ExportService:
     """
-    Exporta os dados já normalizados da tabela `jobs` para Excel.
+    Exporta os dados prontos para consumo do mart `gold.mart_vagas`.
 
     Esse arquivo é o ponto de entrada do tratamento manual: depois
     de gerado, ele é aberto e ajustado no Excel, e o resultado final
@@ -27,30 +27,23 @@ class ExportService:
     @staticmethod
     def _query_vagas() -> pd.DataFrame:
         """
-        Busca todas as vagas com as tecnologias agregadas em uma
-        única coluna (separadas por vírgula), pronta para o Excel.
+        Busca o mart Gold de vagas, já com as tecnologias agregadas.
         """
         sql = """
             SELECT
-                j.id,
-                j.titulo,
-                j.empresa,
-                j.senioridade,
-                j.localizacao,
-                j.salario,
-                j.origem,
-                j.link,
-                j.descricao,
-                j.data_coleta,
-                STRING_AGG(t.nome, ', ' ORDER BY t.nome) AS tecnologias
-            FROM jobs j
-            LEFT JOIN job_technologies jt ON jt.job_id = j.id
-            LEFT JOIN technologies t ON t.id = jt.technology_id
-            GROUP BY
-                j.id, j.titulo, j.empresa, j.senioridade,
-                j.localizacao, j.salario, j.origem, j.link,
-                j.descricao, j.data_coleta
-            ORDER BY j.id
+                id,
+                titulo,
+                empresa,
+                senioridade,
+                localizacao,
+                salario,
+                origem,
+                link,
+                descricao,
+                data_coleta,
+                tecnologias
+            FROM gold.mart_vagas
+            ORDER BY id
         """
         with engine.connect() as conn:
             return pd.read_sql(text(sql), conn)

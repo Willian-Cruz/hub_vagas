@@ -236,6 +236,7 @@ class VagasScraper(BaseScraper):
                     descricao=descricao or "Não informado",
                     link=link,
                     origem=cls.SOURCE,
+                    raw_payload={"html_fragment": str(card)},
                 )
             )
 

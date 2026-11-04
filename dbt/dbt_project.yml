@@ -1,0 +1,25 @@
+name: hub_vagas
+version: "1.0.0"
+config-version: 2
+
+profile: hub_vagas
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  hub_vagas:
+    staging:
+      +schema: silver
+      +materialized: view
+    intermediate:
+      +schema: silver
+      +materialized: table
+    marts:
+      +schema: gold
+      +materialized: table

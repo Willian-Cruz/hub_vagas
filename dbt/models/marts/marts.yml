@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: mart_vagas
+    description: "Vagas Silver enriquecidas com tecnologias, prontas para exportação."
+    columns:
+      - name: id
+        tests: [not_null, unique]
+      - name: link
+        tests: [not_null]
+      - name: origem
+        tests: [not_null]
+  - name: mart_vagas_por_dia
+    description: "Volume de observações coletadas por dia e portal."
+    columns:
+      - name: data_coleta
+        tests: [not_null]
+      - name: origem
+        tests: [not_null]
+  - name: mart_vagas_por_origem_localidade
+    description: "Snapshot Silver de vagas por portal, localidade e senioridade."
+    columns:
+      - name: origem
+        tests: [not_null]
+      - name: vagas_no_snapshot
+        tests: [not_null]
+  - name: mart_demanda_tecnologias
+    description: "Contagem de vagas Silver que mencionam cada tecnologia monitorada."
+    columns:
+      - name: tecnologia
+        tests: [not_null, unique]
+      - name: vagas_com_mencao
+        tests: [not_null]
+  - name: mart_status_fontes
+    description: "Estado da execução mais recente de cada scraper."
+    columns:
+      - name: origem
+        tests: [not_null, unique]
+      - name: status
+        tests:
+          - accepted_values:
+              values: ["success", "empty", "partial", "failed"]

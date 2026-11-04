@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from typing import Optional
+from pydantic import Field
+from typing import Any, Optional
 
 
 class JobSchema(BaseModel):
@@ -12,3 +13,5 @@ class JobSchema(BaseModel):
     salario: Optional[str] = "Não informado"  
     link: str
     origem: str
+    # O fragmento é mantido para Bronze, mas não integra o contrato normalizado.
+    raw_payload: dict[str, Any] = Field(default_factory=dict, exclude=True)

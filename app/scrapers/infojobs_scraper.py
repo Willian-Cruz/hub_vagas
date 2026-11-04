@@ -193,6 +193,7 @@ class InfoJobsScraper(BaseScraper):
                     descricao=descricao,
                     link=urljoin("https://www.infojobs.com.br/", href),
                     origem=cls.SOURCE,
+                    raw_payload={"html_fragment": str(card)},
                 )
             )
 

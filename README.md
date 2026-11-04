@@ -7,7 +7,7 @@
 ![Power BI](https://img.shields.io/badge/Dashboard-Power%20BI-F2C811?logo=powerbi&logoColor=black)
 ![License](https://img.shields.io/badge/licen%C3%A7a-MIT-lightgrey)
 
-Pipeline ETL em Python que coleta vagas de Dados e Tecnologia em portais brasileiros, normaliza os campos, extrai as tecnologias citadas e grava tudo em PostgreSQL. Os dados tratados são exportados para Excel e analisados em um dashboard no Power BI.
+Pipeline de dados que coleta vagas de Dados e Tecnologia em portais brasileiros. Python captura os registros na camada Bronze; dbt padroniza e deduplica na Silver e publica agregações na Gold. A tabela `jobs` continua sendo mantida durante a transição para preservar os consumidores atuais de Excel e Power BI.
 
 A execução é em **lote (batch)**: uma vez por dia via APScheduler, ou manualmente.
 
@@ -18,26 +18,45 @@ A execução é em **lote (batch)**: uma vez por dia via APScheduler, ou manualm
 ```mermaid
 flowchart LR
     A[Portais de vagas<br/>Vagas.com · InfoJobs · Gupy] --> B[Scrapers<br/>Playwright + BeautifulSoup]
-    B --> C[Validação<br/>Pydantic]
-    C --> D[Normalização<br/>senioridade · local · salário · tecnologias]
-    D --> E[(PostgreSQL)]
-    E --> F[Exportação<br/>Excel .xlsx]
+    B --> C[(Bronze<br/>PostgreSQL JSONB)]
+    C --> D[dbt staging e Silver<br/>limpeza · padronização · deduplicação]
+    D --> E[dbt Gold<br/>marts analíticos]
+    C --> L[(jobs legado<br/>compatibilidade durante a transição)]
+    L --> F[Exportação atual<br/>Excel .xlsx]
     F --> G[Dashboard<br/>Power BI]
 ```
 
 | Etapa | Onde fica | O que faz |
 | --- | --- | --- |
-| Coleta | `app/scrapers/`, `app/services/collector_service.py` | Roda cada scraper em sequência; a falha de um não interrompe os outros |
-| Validação | `app/schemas/job_schema.py` | Garante o formato de cada vaga com Pydantic |
-| Normalização | `app/services/normalize_service.py`, `salary_service.py`, `tech_service.py` | Padroniza senioridade e localização, extrai salário via regex e identifica tecnologias |
-| Persistência | `app/repositories/` | Grava em PostgreSQL; um link já existente é contado como duplicado |
-| Orquestração | `app/services/pipeline_service.py`, `app/scheduler.py` | Executa coleta + persistência e registra métricas (coletadas, salvas, duplicadas, erros, duração) |
-| Exportação | `app/services/export_service.py`, `app/export_excel.py` | Gera `data/exports/vagas.xlsx` com as tecnologias agregadas por vaga |
+| Coleta | `app/scrapers/`, `app/services/collector_service.py` | Roda cada scraper em sequência e preserva fragmentos HTML dos cards capturados |
+| Bronze | `app/database/bronze_model.py`, `app/repositories/bronze_repository.py` | Registra snapshots append-only em JSONB, hash, `run_id`, data e resultado por fonte |
+| Silver | `dbt/models/staging/`, `dbt/models/intermediate/jobs.sql` | Padroniza senioridade e localidade, identifica salário divulgado e mantém a observação mais recente por vaga e fonte |
+| Gold | `dbt/models/marts/` | Publica exportação pronta de vagas, volume diário, snapshot por localidade/fonte, demanda de tecnologias e status dos scrapers |
+| Compatibilidade | `app/repositories/job_repository.py` | Mantém a tabela `jobs` atual durante a migração; links já existentes são contados como duplicados |
+| Orquestração e exportação | `app/services/pipeline_service.py`, `app/main.py`, `app/scheduler.py`, `app/services/export_service.py` | Registra métricas, roda dbt no comando manual ou com `--com-dbt` no agendador e exporta o mart Gold para Excel/Power BI |
 
 ## Modelo de dados
 
 ```mermaid
 erDiagram
+    scrape_runs ||--o{ job_observations : registra
+    scrape_runs {
+        uuid run_id PK
+        string source PK
+        string status
+        int jobs_found
+        datetime started_at
+        datetime finished_at
+    }
+    job_observations {
+        bigint id PK
+        uuid run_id FK
+        string source FK
+        string source_job_id
+        datetime collected_at
+        string payload_hash
+        jsonb raw_payload
+    }
     jobs ||--o{ job_technologies : possui
     technologies ||--o{ job_technologies : aparece_em
     jobs {
@@ -73,8 +92,8 @@ hub_vagas/
 ├── app/
 │   ├── config/settings.py     # leitura do .env
 │   ├── constants/selectors.py # seletores CSS dos portais
-│   ├── database/              # conexão e modelos SQLAlchemy (jobs, technologies, job_technologies)
-│   ├── repositories/          # gravação no banco (job_repository, tech_repository)
+│   ├── database/              # conexão e modelos SQLAlchemy (Bronze e tabelas legadas)
+│   ├── repositories/          # persistência Bronze e repositórios legados
 │   ├── schemas/job_schema.py  # validação Pydantic
 │   ├── scrapers/              # base_scraper, vagas_scraper, infojobs_scraper, gupy_scraper
 │   ├── services/              # analytics, collector, export, job, normalize, pipeline,
@@ -84,7 +103,9 @@ hub_vagas/
 │   ├── debug_vagas.py         # diagnóstico visual do scraper do Vagas.com
 │   ├── export_excel.py        # ponto de entrada da exportação
 │   ├── main.py                # execução única do pipeline
+│   ├── run_dbt.py             # CLI dbt com credenciais carregadas do .env
 │   └── scheduler.py           # execução agendada
+├── dbt/                       # projeto dbt: sources, staging, Silver, Gold e testes
 ├── .env.example
 ├── requirements.txt
 └── LICENSE
@@ -148,31 +169,53 @@ anteriores, aplique as migrações de `infra/migrations` em ordem. A migração 
 adiciona a chave da tabela de associação e interrompe se encontrar pares
 duplicados. A migração `002` adiciona `jobs.data_coleta`; vagas antigas recebem
 como data de coleta o momento da migração, pois a versão anterior não guardava
-esse timestamp.
+esse timestamp. A migração `003` cria as tabelas Bronze; `main.py` e
+`scheduler.py` também criam o schema/tabelas Bronze automaticamente.
 
 ### 3. Pipeline
 
 ```bash
-# Execução única (coleta + persistência). Sai com código 1 se falhar
-# ou se nenhuma vaga for coletada.
+# Execução única: coleta, Bronze, compatibilidade `jobs` e dbt build.
+# Sai com código 1 se a coleta/persistência ou os modelos/testes dbt falharem.
 python app/main.py
 
+# Executar somente transformações dbt ou verificar conexão/freshness
+python app/run_dbt.py debug
+python app/run_dbt.py source freshness
+python app/run_dbt.py build
+
 # Execução agendada: todo dia às 06:00, horário de São Paulo (padrão)
-python app/scheduler.py
-python app/scheduler.py --hora 8 --minuto 30   # horário customizado
-python app/scheduler.py --intervalo 2          # a cada N horas (debug)
+python app/scheduler.py --com-dbt
+python app/scheduler.py --hora 8 --minuto 30 --com-dbt  # horário customizado
+python app/scheduler.py --intervalo 2 --com-dbt         # a cada N horas (debug)
 ```
 
 Exemplo de log:
 
 ```text
 PIPELINE INICIADO
-Etapa 1/2: Coletando vagas...
+Etapa 1/3: Coletando vagas...
 Coletadas: 87 vagas
-Etapa 2/2: Persistindo no banco...
+Etapa 2/3: Gravando observações na camada Bronze...
+Bronze concluída — 87 observação(ões)
+Etapa 3/3: Atualizando a tabela legada jobs...
 Persistência concluída — Salvas: 54 | Duplicadas: 33 | Erros: 0
 PIPELINE CONCLUÍDO
+Executando modelos e testes dbt...
 ```
+
+O payload Bronze guarda os campos retornados pelo contrato do scraper e o HTML
+do card capturado, sem normalização de negócio. `run_id` identifica a execução;
+`payload_hash` permite comparar alterações entre coletas. A tabela
+`bronze.scrape_runs` também registra fontes vazias ou com falha, permitindo
+acompanhar a última execução e verificar freshness mesmo quando não há vagas.
+
+O comando `app/run_dbt.py` lê `.env` e configura a conexão dbt a partir de
+`DATABASE_URL` ou das variáveis `DB_*`. O dbt cria os schemas `silver` e `gold`
+durante o `build`; o usuário do PostgreSQL precisa ter permissão para criar
+schemas e tabelas. O perfil sem segredos é copiado de
+`dbt/profiles.yml.example` para o arquivo local ignorado `dbt/profiles.yml`.
+As fontes são declaradas em `dbt/models/sources.yml`.
 
 Os logs ficam em `logs/pipeline.log`, com rotação a cada 5 MB (3 backups).
 
@@ -183,7 +226,9 @@ cd app
 python export_excel.py
 ```
 
-Gera `data/exports/vagas.xlsx`, que alimenta o dashboard no Power BI.
+Gera `data/exports/vagas.xlsx` a partir de `gold.mart_vagas`, que alimenta o
+dashboard no Power BI. Execute `python app/main.py` ou `python app/run_dbt.py build`
+antes de exportar.
 
 ---
 
@@ -195,6 +240,10 @@ pytest tests/ -v
 ```
 
 A suíte usa um mock global do banco (`conftest.py`), então roda sem PostgreSQL. Os testes cobrem scrapers, normalização, salário, analytics, repositórios, pipeline, agendamento, exportação e configuração. Instale as dependências com `pip install -r requirements.txt` antes de executá-los. O GitHub Actions roda a suíte a cada push e pull request na `main`.
+
+Os testes de dados dbt são executados por `python app/run_dbt.py build` junto
+com os modelos. Para verificar a atualização das fontes, execute
+`python app/run_dbt.py source freshness` após pelo menos uma coleta.
 
 ---
 

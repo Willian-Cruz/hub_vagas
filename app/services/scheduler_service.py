@@ -28,7 +28,12 @@ class SchedulerService:
     TIMEZONE      = "America/Sao_Paulo"
 
     @classmethod
-    def iniciar_diario(cls, hora: int = None, minuto: int = None) -> None:
+    def iniciar_diario(
+        cls,
+        hora: int = None,
+        minuto: int = None,
+        executar_dbt: bool = False,
+    ) -> None:
         """
         Inicia o agendador em modo diário.
         Mantém o processo vivo e executa o pipeline todo dia no horário definido.
@@ -44,6 +49,7 @@ class SchedulerService:
 
         scheduler.add_job(
             func    = cls._executar_pipeline,
+            args    = [executar_dbt],
             trigger = CronTrigger(hour=hora, minute=minuto, timezone=cls.TIMEZONE),
             id      = "pipeline_diario",
             name    = "Pipeline Hub Vagas",
@@ -59,7 +65,11 @@ class SchedulerService:
             logger.info("Agendador encerrado pelo usuário")
 
     @classmethod
-    def iniciar_por_intervalo(cls, horas: int = 6) -> None:
+    def iniciar_por_intervalo(
+        cls,
+        horas: int = 6,
+        executar_dbt: bool = False,
+    ) -> None:
         """
         Inicia o agendador em modo intervalo.
         Útil para debug — executa a cada N horas.
@@ -71,6 +81,7 @@ class SchedulerService:
 
         scheduler.add_job(
             func    = cls._executar_pipeline,
+            args    = [executar_dbt],
             trigger = IntervalTrigger(hours=horas),
             id      = "pipeline_intervalo",
             name    = f"Pipeline a cada {horas}h",
@@ -85,7 +96,7 @@ class SchedulerService:
             logger.info("Agendador encerrado pelo usuário")
 
     @staticmethod
-    def _executar_pipeline() -> None:
+    def _executar_pipeline(executar_dbt: bool = False) -> None:
         """
         Callback chamado pelo agendador.
         Importação local evita importação circular na inicialização.
@@ -99,3 +110,10 @@ class SchedulerService:
 
         if not metricas["sucesso"]:
             logger.error("Pipeline encerrou com falha — verifique os logs")
+
+        if executar_dbt and metricas.get("bronze_ok"):
+            from run_dbt import main as executar_transformacoes
+
+            codigo_saida = executar_transformacoes(["build"])
+            if codigo_saida:
+                logger.error("dbt build encerrou com código %s", codigo_saida)

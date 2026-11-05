@@ -283,7 +283,7 @@ class TestInfoJobsScraperParsear:
             '<div class="mb-8">Rio de Janeiro - RJ</div>', ""
         )
         resultado = InfoJobsScraper._parsear(html.encode())
-        assert resultado[0].localizacao == "Não informado"
+        assert resultado[0].localizacao is None
 
 
 def _infojobs_response(html):

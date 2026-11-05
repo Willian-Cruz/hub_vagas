@@ -19,11 +19,16 @@ import argparse
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from database.connection import engine, ensure_local_database_exists
+from database.connection import (
+    engine,
+    ensure_bronze_schema,
+    ensure_local_database_exists,
+)
 from database.models import base
 from database.job_model import Job
 from database.tech_model import Technology
 from database.job_tech_model import job_technologies
+from database.bronze_model import JobObservation, ScrapeRun
 from services.scheduler_service import SchedulerService
 from utils.logger import get_logger
 
@@ -52,6 +57,11 @@ def parse_args():
         default = None,
         help    = "Executa a cada N horas (modo debug). Ignora --hora e --minuto",
     )
+    parser.add_argument(
+        "--com-dbt",
+        action="store_true",
+        help="Executa dbt build após cada coleta bem-sucedida na Bronze",
+    )
     return parser.parse_args()
 
 
@@ -63,11 +73,19 @@ if __name__ == "__main__":
     if ensure_local_database_exists():
         logger.info("Banco local criado com sucesso")
 
+    ensure_bronze_schema()
     base.metadata.create_all(bind=engine)
     logger.info("Banco verificado/criado com sucesso")
 
     if args.intervalo:
         logger.info(f"Modo intervalo: a cada {args.intervalo}h")
-        SchedulerService.iniciar_por_intervalo(horas=args.intervalo)
+        SchedulerService.iniciar_por_intervalo(
+            horas=args.intervalo,
+            executar_dbt=args.com_dbt,
+        )
     else:
-        SchedulerService.iniciar_diario(hora=args.hora, minuto=args.minuto)
+        SchedulerService.iniciar_diario(
+            hora=args.hora,
+            minuto=args.minuto,
+            executar_dbt=args.com_dbt,
+        )

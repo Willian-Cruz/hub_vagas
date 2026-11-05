@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: jobs
+    description: "Camada Silver: uma vaga padronizada por fonte e identificador."
+    columns:
+      - name: origem
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Vagas.com", "InfoJobs", "Gupy"]
+      - name: source_job_id
+        tests: [not_null]
+      - name: link
+        tests: [not_null]
+      - name: data_coleta
+        tests: [not_null]
+      - name: titulo
+        tests: [not_null]

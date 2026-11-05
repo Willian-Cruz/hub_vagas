@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: stg_vagas_com_jobs
+    description: "Campos extraídos das observações Bronze do Vagas.com."
+    columns:
+      - name: bronze_observation_id
+        tests: [not_null, unique]
+      - name: source_job_id
+        tests: [not_null]
+      - name: origem
+        tests:
+          - accepted_values:
+              values: ["Vagas.com"]
+  - name: stg_infojobs_jobs
+    description: "Campos extraídos das observações Bronze do InfoJobs."
+    columns:
+      - name: bronze_observation_id
+        tests: [not_null, unique]
+      - name: source_job_id
+        tests: [not_null]
+      - name: origem
+        tests:
+          - accepted_values:
+              values: ["InfoJobs"]
+  - name: stg_gupy_jobs
+    description: "Campos extraídos das observações Bronze da Gupy."
+    columns:
+      - name: bronze_observation_id
+        tests: [not_null, unique]
+      - name: source_job_id
+        tests: [not_null]
+      - name: origem
+        tests:
+          - accepted_values:
+              values: ["Gupy"]

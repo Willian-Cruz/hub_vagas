@@ -63,3 +63,9 @@ def ensure_local_database_exists() -> bool:
             return True
     finally:
         admin_engine.dispose()
+
+
+def ensure_bronze_schema() -> None:
+    """Cria o schema de ingestão se o usuário do banco tiver permissão."""
+    with engine.begin() as connection:
+        connection.execute(text("CREATE SCHEMA IF NOT EXISTS bronze"))

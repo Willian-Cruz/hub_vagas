@@ -68,13 +68,15 @@ def main(argv: list[str] | None = None) -> int:
     if not DBT_PROFILE.exists():
         shutil.copyfile(DBT_PROFILE_TEMPLATE, DBT_PROFILE)
 
+    # --project-dir e --profiles-dir são opções do subcomando (dbt build ...),
+    # não do dbt em si: antes do subcomando o dbt responde "No such option".
     comando = [
         executavel,
+        *argumentos,
         "--project-dir",
         str(DBT_DIR),
         "--profiles-dir",
         str(DBT_DIR),
-        *argumentos,
     ]
     return subprocess.run(comando, cwd=ROOT_DIR, check=False).returncode
 

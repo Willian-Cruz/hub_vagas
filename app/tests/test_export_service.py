@@ -80,3 +80,57 @@ class TestExportar:
                 caminho = ExportService.exportar()
 
         assert caminho.endswith("vagas.xlsx")
+
+
+class TestDatasComFuso:
+    """O mart Gold devolve timestamptz; to_excel recusa datas com fuso."""
+
+    def test_exporta_colunas_com_fuso_horario(self, tmp_path):
+        df = VAGAS_DF.copy()
+        df["data_coleta"] = pd.to_datetime(
+            ["2026-06-20 13:00:00", "2026-06-20 13:05:00"], utc=True
+        )
+
+        with mock_query(df):
+            with patch.object(ExportService, "OUTPUT_DIR", str(tmp_path)):
+                caminho = ExportService.exportar("fuso.xlsx")
+
+        lido = pd.read_excel(caminho, sheet_name="vagas")
+        # 13:00 UTC = 10:00 em São Paulo
+        assert lido["data_coleta"].iloc[0] == pd.Timestamp("2026-06-20 10:00:00")
+
+    def test_nao_altera_o_dataframe_de_quem_chamou_sem_fuso(self, tmp_path):
+        with mock_query(VAGAS_DF):
+            with patch.object(ExportService, "OUTPUT_DIR", str(tmp_path)):
+                ExportService.exportar("sem_fuso.xlsx")
+
+        assert VAGAS_DF["data_coleta"].iloc[0] == pd.Timestamp("2026-06-20 10:00:00")
+
+
+class TestCamposNovosNoMart:
+
+    def test_consulta_pede_os_campos_novos_do_mart(self):
+        capturado = {}
+
+        class _Conn:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def _fake_read_sql(sql, conn):
+            capturado["sql"] = str(sql)
+            return pd.DataFrame()
+
+        with patch("services.export_service.engine") as engine, \
+                patch("services.export_service.pd.read_sql", side_effect=_fake_read_sql):
+            engine.connect.return_value = _Conn()
+            ExportService._query_vagas()
+
+        for coluna in (
+            "id_externo", "data_publicacao", "modalidade",
+            "experiencia", "escolaridade", "qtd_posicoes",
+        ):
+            assert coluna in capturado["sql"]
+        assert "gold.mart_vagas" in capturado["sql"]

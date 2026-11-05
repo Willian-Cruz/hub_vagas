@@ -1,4 +1,4 @@
--- 003: novos campos de coleta, limpeza de placeholders e chave de deduplicação.
+-- 004: novos campos de coleta, limpeza de placeholders e chave de deduplicação.
 --
 -- Rode UMA vez no banco hub_vagas, depois de um backup (pg_dump). É idempotente:
 -- rodar de novo não altera nada que já foi ajustado.

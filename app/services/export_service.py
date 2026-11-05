@@ -20,6 +20,9 @@ class ExportService:
         os.path.dirname(__file__), "..", "..", "data", "exports"
     )
 
+    # O mart Gold traz timestamptz; o Excel não aceita datas com fuso.
+    TIMEZONE = "America/Sao_Paulo"
+
     # ─────────────────────────────────────────────────────────────
     # QUERY
     # ─────────────────────────────────────────────────────────────
@@ -37,9 +40,15 @@ class ExportService:
                 senioridade,
                 localizacao,
                 salario,
+                modalidade,
+                experiencia,
+                escolaridade,
+                qtd_posicoes,
                 origem,
+                id_externo,
                 link,
                 descricao,
+                data_publicacao,
                 data_coleta,
                 tecnologias
             FROM gold.mart_vagas
@@ -60,6 +69,10 @@ class ExportService:
         Retorna o caminho absoluto do arquivo gerado.
         """
         df = cls._query_vagas()
+
+        # Datas com fuso viram horário de São Paulo, sem fuso (senão to_excel falha)
+        for coluna in df.select_dtypes(include=["datetimetz"]).columns:
+            df[coluna] = df[coluna].dt.tz_convert(cls.TIMEZONE).dt.tz_localize(None)
 
         os.makedirs(cls.OUTPUT_DIR, exist_ok=True)
         caminho = os.path.join(cls.OUTPUT_DIR, nome_arquivo)

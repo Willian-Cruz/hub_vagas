@@ -68,6 +68,9 @@ class BronzeRepository:
                         )
                     )
 
+            # As observações têm FK composta para scrape_runs e não há relationship():
+            # sem o flush o ORM pode inserir as observações antes das execuções.
+            session.flush()
             session.add_all(observacoes)
             session.commit()
             return len(observacoes)

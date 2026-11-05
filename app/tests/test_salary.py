@@ -39,13 +39,18 @@ class TestExtrairSalario:
         assert SalaryService.extrair(texto) == "A combinar"
 
     def test_sem_informacao(self):
-        assert SalaryService.extrair("Vaga para analista de dados")  == "Não informado"
-        assert SalaryService.extrair("")                              == "Não informado"
-        assert SalaryService.extrair(None)                           == "Não informado"
+        assert SalaryService.extrair("Vaga para analista de dados")  is None
+        assert SalaryService.extrair("")                              is None
+        assert SalaryService.extrair(None)                           is None
+
+    def test_valores_do_card_do_infojobs(self):
+        assert SalaryService.extrair("R$ 1.500,00")                == "R$ 1.500,00"
+        assert SalaryService.extrair("A combinar")                 == "A combinar"
+        assert SalaryService.extrair("R$ 1.000,00 a R$ 1.200,00")  == "R$ 1.000,00 - R$ 1.200,00"
 
     def test_descricao_real_sem_salario(self):
         texto = (
             "Buscamos profissional com experiência em Python, SQL e AWS. "
             "Benefícios: VR, VT, plano de saúde."
         )
-        assert SalaryService.extrair(texto) == "Não informado"
+        assert SalaryService.extrair(texto) is None

@@ -10,7 +10,8 @@ class SalaryService:
     Retorna uma string formatada como:
         "R$ 5.000 - R$ 8.000"
         "R$ 6.000"
-        "Não informado"
+        "A combinar"
+        None   (quando não há informação)
 
     Estratégia:
         1. Procura padrão de faixa: "R$ X a R$ Y" ou "R$ X - R$ Y"
@@ -40,7 +41,7 @@ class SalaryService:
     )
 
     @classmethod
-    def extrair(cls, texto: Optional[str]) -> str:
+    def extrair(cls, texto: Optional[str]) -> Optional[str]:
         """
         Extrai a faixa salarial de um texto.
 
@@ -48,10 +49,10 @@ class SalaryService:
             texto: descrição ou qualquer campo de texto da vaga
 
         Returns:
-            String com salário encontrado ou 'Não informado'
+            String com salário encontrado ou None
         """
         if not texto:
-            return "Não informado"
+            return None
 
         # Remove quebras de linha para facilitar o match
         texto_limpo = re.sub(r"\s+", " ", texto).strip()
@@ -73,7 +74,7 @@ class SalaryService:
         if match_k:
             return cls._converter_k(match_k.group(0))
 
-        return "Não informado"
+        return None
 
     # ── Helpers ────────────────────────────────────────────────
 

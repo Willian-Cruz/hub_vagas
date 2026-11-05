@@ -1,0 +1,15 @@
+# Perfil sem credenciais fixas. app/run_dbt.py cria profiles.yml local e carrega
+# o .env do projeto para preencher as variáveis DBT_*.
+hub_vagas:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_HOST', 'localhost') }}"
+      user: "{{ env_var('DBT_USER') }}"
+      password: "{{ env_var('DBT_PASSWORD') }}"
+      port: "{{ env_var('DBT_PORT', '5432') | int }}"
+      dbname: "{{ env_var('DBT_DATABASE') }}"
+      schema: "{{ env_var('DBT_SCHEMA', 'public') }}"
+      sslmode: "{{ env_var('DBT_SSLMODE', 'prefer') }}"
+      threads: "{{ env_var('DBT_THREADS', '4') | int }}"

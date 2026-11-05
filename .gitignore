@@ -82,6 +82,13 @@ htmlcov/
 data/raw/
 data/exports/
 
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/profiles.yml
+dbt/.user.yml
+
 # =========================
 # Playwright
 # =========================

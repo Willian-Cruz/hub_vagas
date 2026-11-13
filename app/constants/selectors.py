@@ -19,11 +19,14 @@ INFOJOBS_COMPANY = "div.d-flex.align-items-baseline a"
 INFOJOBS_METADATA = "div.d-inline-flex.flex-wrap div"
 # Cada item do bloco de metadados traz um ícone que diz o que ele é.
 # "icon-suitcase" é a EXPERIÊNCIA exigida (não a senioridade).
+# A modalidade tem um ícone para cada valor: sem os três, só "Presencial" é lida.
 INFOJOBS_METADATA_ICONS = {
     "icon-money": "salario",
     "icon-suitcase": "experiencia",
     "icon-graduate-hat": "escolaridade",
-    "icon-buildings": "modalidade",
+    "icon-buildings": "modalidade",              # Presencial
+    "icon-house-and-building": "modalidade",     # Híbrido
+    "icon-user-home": "modalidade",              # Home office
 }
 INFOJOBS_LOCATION = "div.mb-8"
 # Trecho oculto ", 0 Km de você." dentro do bloco do local.

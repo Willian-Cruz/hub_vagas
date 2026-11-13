@@ -1,3 +1,4 @@
+import copy
 import os
 import re
 import time
@@ -19,6 +20,7 @@ from constants.selectors import (
 )
 from schemas.job_schema import JobSchema
 from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
+from services.seniority_service import classificar_senioridade
 from utils.date_utils import parse_data_infojobs
 from utils.text_utils import normalizar_espacos, valor_ou_none
 
@@ -168,9 +170,12 @@ class InfoJobsScraper(BaseScraper):
             # O bloco de metadados também tem a classe mb-8: não é o local.
             if elemento.select_one("svg") or "d-inline-flex" in (elemento.get("class") or []):
                 continue
-            for ruido in elemento.select(INFOJOBS_LOCATION_NOISE):
+            # Trabalha numa cópia: decompor o ruído no card original apagaria da Bronze a
+            # distância e as coordenadas (data-vagalatitude/longitude) da vaga.
+            local = copy.copy(elemento)
+            for ruido in local.select(INFOJOBS_LOCATION_NOISE):
                 ruido.decompose()  # trecho oculto ", 0 Km de você."
-            return valor_ou_none(elemento.get_text(" ", strip=True))
+            return valor_ou_none(local.get_text(" ", strip=True))
         return None
 
     @staticmethod
@@ -207,6 +212,10 @@ class InfoJobsScraper(BaseScraper):
                 cards_invalidos += 1
                 continue
 
+            # O fragmento da Bronze é tirado ANTES de ler os campos: guarda o HTML original
+            # do portal, não o card depois de mexermos nele.
+            html_fragment = str(card)
+
             id_externo = card.get("data-id")
             if not id_externo:
                 encontrado = cls._ID_NO_LINK.search(href)
@@ -215,6 +224,15 @@ class InfoJobsScraper(BaseScraper):
             empresa_el = card.select_one(INFOJOBS_COMPANY)
             data_el = card.select_one(INFOJOBS_DATE)
             metadados = cls._extrair_metadados(card)
+            descricao = cls._extrair_descricao(card)
+            experiencia = metadados.get("experiencia")
+
+            # O InfoJobs não tem campo de nível (o ícone "suitcase" é experiência). A
+            # senioridade sai da cascata: título, nível explícito na descrição, campo de
+            # experiência e "N anos" na descrição. A origem fica na Bronze para auditoria.
+            senioridade = classificar_senioridade(
+                titulo, experiencia=experiencia, descricao=descricao
+            )
 
             vagas.append(
                 JobSchema(
@@ -224,15 +242,16 @@ class InfoJobsScraper(BaseScraper):
                         if empresa_el is not None
                         else None
                     ),
-                    # O InfoJobs não tem campo de nível; o ícone "suitcase" é
-                    # experiência. A senioridade é inferida do título ao salvar.
-                    senioridade=None,
+                    senioridade=senioridade.nivel,
                     localizacao=cls._extrair_local(card),
-                    descricao=cls._extrair_descricao(card),
+                    descricao=descricao,
                     salario=metadados.get("salario"),
                     link=urljoin(cls.SITE_URL, href),
                     origem=cls.SOURCE,
-                    raw_payload={"html_fragment": str(card)},
+                    raw_payload={
+                        "html_fragment": html_fragment,
+                        "senioridade_origem": senioridade.origem,
+                    },
                     id_externo=str(id_externo) if id_externo else None,
                     data_publicacao=(
                         parse_data_infojobs(data_el.get("data-value"))
@@ -240,7 +259,7 @@ class InfoJobsScraper(BaseScraper):
                         else None
                     ),
                     modalidade=metadados.get("modalidade"),
-                    experiencia=metadados.get("experiencia"),
+                    experiencia=experiencia,
                     escolaridade=metadados.get("escolaridade"),
                 )
             )

@@ -54,7 +54,6 @@ A tabela `jobs` (raw) é mantida pelo SQLAlchemy. O schema `bronze` (`scrape_run
 
 ```mermaid
 erDiagram
-    scrape_runs ||--o{ job_observations : registra
     scrape_runs {
         uuid run_id PK
         string source PK
@@ -108,6 +107,96 @@ flowchart LR
 ```
 
 ---
+
+## Estrutura detalhada de cada camada
+
+### Raw — `public.jobs` (landing zone)
+
+Uma linha por vaga, dedup por `link` (UNIQUE) e por `(origem, id_externo)`.
+
+| Coluna | Tipo | Restrição |
+| --- | --- | --- |
+| `id` | int | PK |
+| `titulo` | string | — |
+| `empresa` | string | — |
+| `senioridade` | string | — |
+| `localizacao` | string | — |
+| `descricao` | text | — |
+| `salario` | string | — |
+| `link` | string | UK, NOT NULL |
+| `origem` | string | — |
+| `data_coleta` | datetime | NOT NULL, default `now()` |
+| `id_externo` | string | — |
+| `data_publicacao` | datetime | — |
+| `modalidade` | string | — |
+| `experiencia` | string | — |
+| `escolaridade` | string | — |
+| `qtd_posicoes` | int | — |
+| `chave_conteudo` | string | index |
+
+### Bronze — `bronze.scrape_runs` (monitoramento de execução)
+
+Snapshot append-only de execução por fonte.
+
+| Coluna | Tipo | Restrição |
+| --- | --- | --- |
+| `run_id` | uuid | PK (composto com `source`) |
+| `source` | string | PK (composto com `run_id`) |
+| `status` | string | NOT NULL |
+| `pages_processed` | int | NOT NULL, default 0 |
+| `jobs_found` | int | NOT NULL, default 0 |
+| `error` | text | — |
+| `started_at` | datetime | NOT NULL |
+| `finished_at` | datetime | NOT NULL |
+| `created_at` | datetime | NOT NULL, default `now()` |
+
+### Silver — `silver.jobs` (normalização + dedupe)
+
+Uma vaga por portal e identificador, campo sem informação é `NULL`.
+
+| Coluna | Tipo | Restrição |
+| --- | --- | --- |
+| `raw_job_id` | int | — |
+| `origem` | string | — |
+| `link` | string | — |
+| `id_externo` | string | — |
+| `titulo` | string | — |
+| `empresa` | string | — |
+| `senioridade` | string | — |
+| `localizacao` | string | — |
+| `descricao` | text | — |
+| `salario` | string | — |
+| `modalidade` | string | — |
+| `experiencia` | string | — |
+| `escolaridade` | string | — |
+| `qtd_posicoes` | int | — |
+| `data_publicacao` | datetime | — |
+| `chave_conteudo` | string | — |
+| `data_coleta` | datetime | — |
+
+### Gold — `gold.mart_vagas` (exportação + Power BI)
+
+Vagas Silver enriquecidas com tecnologias.
+
+| Coluna | Tipo | Restrição |
+| --- | --- | --- |
+| `id` | int | PK |
+| `titulo` | string | — |
+| `empresa` | string | — |
+| `senioridade` | string | — |
+| `localizacao` | string | — |
+| `salario` | string | — |
+| `modalidade` | string | — |
+| `experiencia` | string | — |
+| `escolaridade` | string | — |
+| `qtd_posicoes` | int | — |
+| `origem` | string | — |
+| `id_externo` | string | — |
+| `link` | string | — |
+| `descricao` | text | — |
+| `data_publicacao` | datetime | — |
+| `data_coleta` | datetime | — |
+| `tecnologias` | string | agregação `string_agg` das tecnologias monitoradas |
 
 ## Regras de dados
 
@@ -227,6 +316,7 @@ A variável opcional `DB_SSLMODE` (por exemplo, `require`) é lida apenas pelo d
 | `002` | Adiciona `jobs.data_coleta`. Vagas antigas recebem o momento da migração, pois a versão anterior não guardava esse timestamp |
 | `003` | Cria o schema `bronze` com `scrape_runs` (`main.py` e `scheduler.py` também os criam automaticamente) |
 | `004` | Adiciona em `jobs` os campos `id_externo`, `data_publicacao`, `modalidade`, `experiencia`, `escolaridade`, `qtd_posicoes` e `chave_conteudo`; preenche `id_externo` a partir dos links já gravados; troca os textos "Não informado", "Confidencial" e "Localização Não Informada" por `NULL`; cria o índice único `(origem, id_externo)` |
+| `005` | Remove a tabela obsoleta `bronze.job_observations` (não lida por nenhum consumidor; o dbt lê direto da raw `jobs`) |
 
 A `004` é idempotente e **interrompe** se houver o mesmo ID repetido no mesmo portal. Faça um backup antes de aplicá-la:
 
@@ -310,7 +400,9 @@ O `app/run_dbt.py` lê o `.env` e configura a conexão a partir de `DATABASE_URL
 | Raw | scrapers → `jobs` | tabela `jobs` (schema público) | tabela |
 | Bronze | `bronze.scrape_runs` | tabela `scrape_runs` (schema bronze) | tabela |
 | Silver | raw `jobs` → `silver.jobs` | `stg_*`, `jobs` | view / tabela |
-| Gold | Silver → `gold.mart_*` | `mart_vagas`, `mart_vagas_por_dia`, `mart_vagas_por_origem_localidade`, `mart_demanda_tecnologias`, `mart_status_fontes` | tabela |
+| Gold | Silver → `gold.mart_vagas` | `mart_vagas` | tabela |
+
+Os demais marts Gold (`mart_vagas_por_dia`, `mart_vagas_por_origem_localidade`, `mart_demanda_tecnologias`, `mart_status_fontes`) estão planejados para remoção; as visualizações serão construídas diretamente no Power BI.
 
 Além dos testes declarados nos `.yml` (não nulo, único, valores aceitos), há testes em `dbt/tests/` que protegem a Silver: sem ID repetido no mesmo portal, sem vaga repetida por conteúdo e sem o texto "Não informado" nos campos.
 

@@ -31,7 +31,7 @@ from database.models import base
 from database.job_model import Job
 from database.tech_model import Technology
 from database.job_tech_model import job_technologies
-from database.bronze_model import JobObservation, ScrapeRun
+from database.bronze_model import ScrapeRun
 from services.scheduler_service import SchedulerService
 from utils.logger import get_logger
 

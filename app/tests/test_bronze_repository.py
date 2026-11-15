@@ -1,5 +1,5 @@
 """
-Testes do BronzeRepository: ordem de gravação (FK) e conteúdo do payload.
+Testes do BronzeRepository: gravação de scrape_runs na camada Bronze.
 
 Execução: pytest tests/test_bronze_repository.py -v
 """
@@ -45,17 +45,14 @@ def _persistir(resultados):
     return total, sessao
 
 
-class TestOrdemDeGravacao:
+class TestGravacaoScrapeRun:
 
-    def test_execucoes_sao_gravadas_antes_das_observacoes(self):
-        # observations -> scrape_runs é FK composta sem relationship(): sem o flush
-        # o ORM pode inserir as observações primeiro e o Postgres recusa.
+    def test_execucao_eh_gravada_antes_do_commit(self):
         _, sessao = _persistir([_resultado([_vaga()])])
 
         chamadas = [c[0] for c in sessao.method_calls]
-        assert chamadas.index("flush") < chamadas.index("add_all")
-        assert all(i < chamadas.index("flush") for i, c in enumerate(chamadas) if c == "add")
-        assert chamadas.index("add_all") < chamadas.index("commit")
+        assert chamadas.index("add") < chamadas.index("commit")
+        assert sessao.add.call_count == 1  # apenas um ScrapeRun
 
     def test_erro_na_gravacao_faz_rollback_e_propaga(self):
         sessao = MagicMock()
@@ -76,7 +73,7 @@ class TestOrdemDeGravacao:
 
 class TestPayload:
 
-    def test_guarda_campos_novos_nulos_e_html_bruto(self):
+    def test_guarda_campos_do_scrape_run(self):
         vaga = _vaga(
             id_externo="1",
             data_publicacao=datetime(2026, 10, 30),
@@ -87,16 +84,15 @@ class TestPayload:
         total, sessao = _persistir([_resultado([vaga])])
 
         assert total == 1
-        observacao = sessao.add_all.call_args[0][0][0]
-        job = observacao.raw_payload["job"]
-        assert job["id_externo"] == "1"
-        assert job["data_publicacao"] == "2026-10-30T00:00:00"
-        assert job["qtd_posicoes"] == 2
-        assert job["empresa"] is None
-        assert observacao.raw_payload["source_payload"] == {"html_fragment": "<li>card</li>"}
+        scrape_run = sessao.add.call_args[0][0]
+        assert scrape_run.source == "Vagas.com"
+        assert scrape_run.status == "success"
+        assert scrape_run.pages_processed == 1
+        assert scrape_run.jobs_found == 1
+        assert scrape_run.error is None
 
     def test_fonte_sem_vagas_ainda_registra_a_execucao(self):
         total, sessao = _persistir([_resultado([])])
 
-        assert total == 0
+        assert total == 1  # ScrapeRun sempre é gravado, mesmo sem vagas
         assert sessao.add.call_count == 1  # só o ScrapeRun

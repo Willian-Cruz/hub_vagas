@@ -1,15 +1,13 @@
 """Persistência append-only das coletas na camada Bronze."""
-import hashlib
-import json
 from datetime import datetime, timezone
 from uuid import UUID
 
 from database.connection import SessionLocal
-from database.bronze_model import JobObservation, ScrapeRun
+from database.bronze_model import ScrapeRun
 
 
 class BronzeRepository:
-    """Grava observações e o estado dos scrapers sem aplicar regras de negócio."""
+    """Grava o estado dos scrapers na camada Bronze sem aplicar regras de negócio."""
 
     @staticmethod
     def persistir_resultados(
@@ -18,15 +16,12 @@ class BronzeRepository:
         started_at: datetime,
         finished_at: datetime | None = None,
     ) -> int:
-        """Salva uma observação por vaga e retorna quantas foram registradas.
+        """Salva o status de execução de cada fonte em bronze.scrape_runs.
 
-        O payload contém a saída original do contrato de cada scraper, antes
-        da normalização de senioridade, localidade, salário e tecnologias.
-        Cada execução cria novas observações para preservar o histórico.
+        Retorna quantos registros de scrape_run foram gravados.
         """
         finished_at = finished_at or datetime.now(timezone.utc)
         session = SessionLocal()
-        observacoes = []
 
         try:
             for resultado in resultados:
@@ -43,37 +38,8 @@ class BronzeRepository:
                     )
                 )
 
-                for vaga in resultado.jobs:
-                    payload = {
-                        "schema_version": 1,
-                        "job": vaga.model_dump(mode="json"),
-                        "source_payload": vaga.raw_payload,
-                    }
-                    hash_json = json.dumps(
-                        {"schema_version": 1, "job": payload["job"]},
-                        ensure_ascii=False,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    )
-                    observacoes.append(
-                        JobObservation(
-                            run_id=run_id,
-                            source=resultado.source,
-                            source_job_id=vaga.link,
-                            collected_at=finished_at,
-                            payload_hash=hashlib.sha256(
-                                hash_json.encode("utf-8")
-                            ).hexdigest(),
-                            raw_payload=payload,
-                        )
-                    )
-
-            # As observações têm FK composta para scrape_runs e não há relationship():
-            # sem o flush o ORM pode inserir as observações antes das execuções.
-            session.flush()
-            session.add_all(observacoes)
             session.commit()
-            return len(observacoes)
+            return len(resultados)
         except Exception:
             session.rollback()
             raise

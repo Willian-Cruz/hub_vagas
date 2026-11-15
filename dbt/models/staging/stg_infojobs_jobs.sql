@@ -1,1 +1,1 @@
-{{ select_bronze_jobs('InfoJobs') }}
+{{ select_raw_jobs('InfoJobs') }}

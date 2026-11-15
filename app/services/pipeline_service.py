@@ -1,31 +1,36 @@
 """
-PipelineService — orquestra APENAS a ingestão de dados: coleta e landing zone Bronze.
+PipelineService — orquestra APENAS a ingestão de dados: coleta e raw layer `jobs`.
 
 Responsabilidades:
     1. Coleta vagas via CollectorService (todos os scrapers)
-    2. Grava payloads e status de fontes na camada Bronze (append-only)
-    3. Registra início, fim, duração e erros no log
+    2. Grava vagas na tabela raw `jobs` (dedup por link / origem+id_externo)
+    3. Registra status de cada fonte em bronze.scrape_runs para monitoramento
+    4. Registra início, fim, duração e erros no log
 
 Por que separar do main.py?
     O main.py se torna apenas um ponto de entrada manual.
     O SchedulerService chama PipelineService.executar() no horário agendado.
     Testes podem chamar PipelineService.executar() de forma controlada.
 
-Arquitetura decoupled:
-    - Ingestão (PipelineService): scrape → Bronze (landing zone)
-    - Transformação (dbt): Bronze → Silver → Gold
+Arquitetura medallion decoupled:
+    - Raw (tabela jobs): scrape direto, dedup básica por link/origem+id_externo
+    - Bronze (dbt): snapshot imutável a partir da raw (append-only)
+    - Silver (dbt): normalização, deduplicação avançada a partir do Bronze
+    - Gold (dbt): marts analíticos a partir do Silver
     - Consumo: Gold → Excel / Power BI
 
-A tabela legacy `jobs` (JobRepository) foi removida deste fluxo.
-A transformação é responsibility separada, executada via `python app/transform.py`.
+A transformação é responsabilidade separada, executada via `python app/transform.py`.
 """
 import time
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from sqlalchemy.exc import IntegrityError
+
 from utils.logger import get_logger
 from services.collector_service import CollectorService
 from repositories.bronze_repository import BronzeRepository
+from repositories.job_repository import DUPLICADA, ERRO, JobRepository, SALVA
 from scrapers.base_scraper import ScrapeStatus
 
 logger = get_logger(__name__)
@@ -36,19 +41,21 @@ class PipelineService:
     @staticmethod
     def executar() -> dict:
         """
-        Executa o pipeline de ingestão: coleta e persistência na Bronze.
+        Executa o pipeline de ingestão: coleta e persistência na raw layer `jobs`.
 
         Returns:
             dict com métricas da execução:
             {
-                "run_id":       str,   # UUID da execução
-                "coletadas":    int,   # vagas do tema retornadas pelos scrapers
-                "descartadas":  int,   # vagas fora do tema, descartadas na coleta
-                "bronze_salvas": int,   # observações gravadas na camada Bronze
-                "bronze_ok":    bool,  # True se a Bronze foi gravada com sucesso
-                "fontes":       list,  # status, contagem e erro por scraper
-                "duracao_seg":  float, # tempo total em segundos
-                "sucesso":      bool,  # False se a coleta ou persistência falhar
+                "run_id":        str,   # UUID da execução
+                "coletadas":     int,   # vagas do tema retornadas pelos scrapers
+                "descartadas":   int,   # vagas fora do tema, descartadas na coleta
+                "raw_salvas":    int,   # vagas inseridas na tabela raw `jobs`
+                "raw_duplicadas":int,   # vagas ignoradas por já existirem
+                "raw_erros":     int,   # vagas que falharam ao salvar
+                "bronze_ok":     bool,  # True se os ScrapeRuns foram gravados
+                "fontes":        list,  # status, contagem e erro por scraper
+                "duracao_seg":   float, # tempo total em segundos
+                "sucesso":       bool,  # False se a coleta ou persistência falhar
             }
         """
         logger.info("=" * 60)
@@ -57,13 +64,15 @@ class PipelineService:
 
         metricas = {
             "run_id": None,
-            "coletadas":   0,
-            "descartadas": 0,
-            "bronze_salvas": 0,
-            "bronze_ok": False,
-            "fontes":      [],
-            "duracao_seg": 0.0,
-            "sucesso":     False,
+            "coletadas":     0,
+            "descartadas":   0,
+            "raw_salvas":    0,
+            "raw_duplicadas": 0,
+            "raw_erros":     0,
+            "bronze_ok":     False,
+            "fontes":        [],
+            "duracao_seg":   0.0,
+            "sucesso":       False,
         }
 
         inicio = time.time()
@@ -73,7 +82,7 @@ class PipelineService:
 
         try:
             # ── 1. Coleta ──────────────────────────────────────────────
-            logger.info("Etapa 1/2: Coletando vagas...")
+            logger.info("Etapa 1/3: Coletando vagas...")
             resultados = CollectorService.coletar_resultados()
             metricas["fontes"] = [
                 {
@@ -109,11 +118,31 @@ class PipelineService:
                 if resultado.error:
                     logger.warning(f"Fonte {resultado.source}: {resultado.error}")
 
-            # ── 2. Bronze: landing zone (append-only) ──────────────────
-            logger.info("Etapa 2/2: Gravando observações na camada Bronze...")
+            # ── 2. Raw layer: salvar na tabela `jobs` ────────────────────
+            logger.info("Etapa 2/3: Gravando vagas na raw layer `jobs`...")
+            try:
+                for vaga in vagas:
+                    resultado_salvamento = JobRepository.salvar(vaga)
+                    if resultado_salvamento == SALVA:
+                        metricas["raw_salvas"] += 1
+                    elif resultado_salvamento == DUPLICADA:
+                        metricas["raw_duplicadas"] += 1
+                    else:
+                        metricas["raw_erros"] += 1
+                logger.info(
+                    "Raw concluída — %d salvas, %d duplicadas, %d erros",
+                    metricas["raw_salvas"],
+                    metricas["raw_duplicadas"],
+                    metricas["raw_erros"],
+                )
+            except Exception:
+                logger.exception("Falha ao persistir na raw layer `jobs`")
+
+            # ── 3. Bronze: registro de execução por fonte ────────────────
+            logger.info("Etapa 3/3: Gravando status de execução no Bronze...")
             bronze_ok = False
             try:
-                metricas["bronze_salvas"] = BronzeRepository.persistir_resultados(
+                metricas_bronze = BronzeRepository.persistir_resultados(
                     resultados,
                     run_id=run_id,
                     started_at=inicio_utc,
@@ -122,11 +151,11 @@ class PipelineService:
                 bronze_ok = True
                 metricas["bronze_ok"] = True
                 logger.info(
-                    "Bronze concluída — %d observação(ões)",
-                    metricas["bronze_salvas"],
+                    "Bronze concluída — %d scrape_run(s) registrado(s)",
+                    metricas_bronze,
                 )
             except Exception:
-                logger.exception("Falha ao persistir a camada Bronze")
+                logger.exception("Falha ao persistir status no Bronze")
 
             metricas["sucesso"] = (
                 bronze_ok
@@ -150,7 +179,8 @@ class PipelineService:
                 f"PIPELINE {status} em {metricas['duracao_seg']}s | "
                 f"Coletadas: {metricas['coletadas']} | "
                 f"Descartadas: {metricas['descartadas']} | "
-                f"Bronze: {metricas['bronze_salvas']}"
+                f"Raw: {metricas['raw_salvas']} salvas / "
+                f"{metricas['raw_duplicadas']} dup / {metricas['raw_erros']} err"
             )
             logger.info("=" * 60)
 

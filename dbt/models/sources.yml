@@ -1,8 +1,45 @@
 version: 2
 
 sources:
+  - name: raw
+    description: "Tabela raw `jobs`: dados brutos inseridos diretamente pelos scrapers (landing zone)."
+    schema: public
+    tables:
+      - name: jobs
+        description: "Camada raw: uma linha por vaga, dedup por link / origem+id_externo. Fonte de verdade para Bronze."
+        loaded_at_field: data_coleta
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 72, period: hour}
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: titulo
+            tests: [not_null]
+          - name: empresa
+          - name: senioridade
+          - name: localizacao
+          - name: descricao
+          - name: salario
+          - name: link
+            tests: [not_null, unique]
+          - name: origem
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ["Vagas.com", "InfoJobs", "Gupy"]
+          - name: data_coleta
+            tests: [not_null]
+          - name: id_externo
+          - name: data_publicacao
+          - name: modalidade
+          - name: experiencia
+          - name: escolaridade
+          - name: qtd_posicoes
+          - name: chave_conteudo
+
   - name: bronze
-    description: "Snapshots append-only gravados pelos scrapers em PostgreSQL."
+    description: "Snapshots append-only gravados pelos scrapers em PostgreSQL (monitoramento de execução)."
     schema: bronze
     tables:
       - name: scrape_runs
@@ -20,22 +57,4 @@ sources:
               - accepted_values:
                   values: ["Vagas.com", "InfoJobs", "Gupy"]
           - name: status
-            tests: [not_null]
-      - name: job_observations
-        description: "Payload extraído pelo scraper antes da normalização de negócio."
-        columns:
-          - name: id
-            tests: [not_null, unique]
-          - name: run_id
-            tests: [not_null]
-          - name: source
-            tests:
-              - not_null
-              - accepted_values:
-                  values: ["Vagas.com", "InfoJobs", "Gupy"]
-          - name: source_job_id
-            tests: [not_null]
-          - name: collected_at
-            tests: [not_null]
-          - name: raw_payload
             tests: [not_null]

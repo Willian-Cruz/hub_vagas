@@ -1,5 +1,5 @@
 """
-SchedulerService — gerencia o agendamento do pipeline.
+SchedulerService — gerencia o agendamento do pipeline de INGESTÃO.
 
 Por que APScheduler?
     - Roda dentro do processo Python, sem infraestrutura externa
@@ -11,6 +11,10 @@ Modos disponíveis:
     - Diário:    executa todo dia às 06:00 (padrão)
     - Intervalo: executa a cada N horas (útil para debug)
     - Único:     executa uma vez imediatamente e encerra (útil para teste)
+
+Arquitetura decoupled:
+    - Ingestão (PipelineService): scrape → Bronze
+    - Transformação (dbt): Bronze → Silver → Gold, executada via `python app/transform.py`
 """
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -32,7 +36,7 @@ class SchedulerService:
         cls,
         hora: int = None,
         minuto: int = None,
-        executar_dbt: bool = False,
+        executar_transformacao: bool = False,
     ) -> None:
         """
         Inicia o agendador em modo diário.
@@ -49,7 +53,7 @@ class SchedulerService:
 
         scheduler.add_job(
             func    = cls._executar_pipeline,
-            args    = [executar_dbt],
+            args    = [executar_transformacao],
             trigger = CronTrigger(hour=hora, minute=minuto, timezone=cls.TIMEZONE),
             id      = "pipeline_diario",
             name    = "Pipeline Hub Vagas",
@@ -68,7 +72,7 @@ class SchedulerService:
     def iniciar_por_intervalo(
         cls,
         horas: int = 6,
-        executar_dbt: bool = False,
+        executar_transformacao: bool = False,
     ) -> None:
         """
         Inicia o agendador em modo intervalo.
@@ -81,7 +85,7 @@ class SchedulerService:
 
         scheduler.add_job(
             func    = cls._executar_pipeline,
-            args    = [executar_dbt],
+            args    = [executar_transformacao],
             trigger = IntervalTrigger(hours=horas),
             id      = "pipeline_intervalo",
             name    = f"Pipeline a cada {horas}h",
@@ -96,7 +100,7 @@ class SchedulerService:
             logger.info("Agendador encerrado pelo usuário")
 
     @staticmethod
-    def _executar_pipeline(executar_dbt: bool = False) -> None:
+    def _executar_pipeline(executar_transformacao: bool = False) -> None:
         """
         Callback chamado pelo agendador.
         Importação local evita importação circular na inicialização.
@@ -105,15 +109,15 @@ class SchedulerService:
         # antes da configuração do agendador estar completa
         from services.pipeline_service import PipelineService
 
-        logger.info("Agendador disparou a execução do pipeline")
+        logger.info("Agendador disparou a execução do pipeline de ingestão")
         metricas = PipelineService.executar()
 
         if not metricas["sucesso"]:
             logger.error("Pipeline encerrou com falha — verifique os logs")
 
-        if executar_dbt and metricas.get("bronze_ok"):
-            from run_dbt import main as executar_transformacoes
+        if executar_transformacao and metricas.get("bronze_ok"):
+            from transform import main as executar_transformacoes
 
-            codigo_saida = executar_transformacoes(["build"])
+            codigo_saida = executar_transformacoes()
             if codigo_saida:
-                logger.error("dbt build encerrou com código %s", codigo_saida)
+                logger.error("Transformação dbt encerrou com código %s", codigo_saida)

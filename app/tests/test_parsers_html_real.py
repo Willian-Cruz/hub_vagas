@@ -192,7 +192,10 @@ class TestInfoJobsHtmlReal:
             "Sem experiência",
             None,
         ]
-        assert all(j.senioridade is None for j in jobs)
+        # "Entre 1 e 3 anos" é experiência: nunca vira o texto da senioridade. A senioridade sai da
+        # cascata (título > descrição > experiência); estas 9 vagas são todas de estágio pelo título.
+        assert all(j.senioridade == "Estágio/Trainee" for j in jobs)
+        assert all(j.raw_payload["senioridade_origem"] == "titulo" for j in jobs)
 
     def test_modalidade_e_escolaridade(self, infojobs):
         jobs, _, _ = infojobs

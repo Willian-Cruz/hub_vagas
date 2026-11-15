@@ -54,6 +54,18 @@ class TestNormalizarSenioridade:
         assert NormalizeService.normalizar_senioridade("Técnico")                == "Técnico"
         assert NormalizeService.normalizar_senioridade("Júnior/Trainee")         == "Júnior"
         assert NormalizeService.normalizar_senioridade("Gerência")               == "Liderança"
+        assert NormalizeService.normalizar_senioridade("Liderança")             == "Liderança"
+        assert NormalizeService.normalizar_senioridade("Lideranca")             == "Liderança"
+
+    def test_pl_sql_e_certificacao_nao_sao_pleno(self):
+        assert NormalizeService.normalizar_senioridade("Desenvolvedor PL/SQL") is None
+        assert NormalizeService.normalizar_senioridade("Desenvolvedor PL-SQL") is None
+        assert NormalizeService.normalizar_senioridade("Desenvolvedor PL SQL") is None
+        assert NormalizeService.normalizar_senioridade("Analista Power BI (PL-300)") is None
+        assert NormalizeService.normalizar_senioridade("Desenvolvedor PL/SQL Sênior") == "Sênior"
+        assert NormalizeService.normalizar_senioridade("Analista Pl") == "Pleno"
+        assert NormalizeService.normalizar_senioridade("Pl/Sr") == "Pleno"
+        assert NormalizeService.normalizar_senioridade("Analista Mid-level") == "Pleno"
 
     def test_abreviacao_exige_palavra_inteira(self):
         # "pl" e "sr" dentro de outra palavra não são nível

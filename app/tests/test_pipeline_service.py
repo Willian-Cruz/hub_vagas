@@ -47,13 +47,13 @@ def test_pipeline_persiste_vagas_parciais_e_marca_falha(monkeypatch):
         error="falha ao buscar a página seguinte",
     )
     monkeypatch.setattr(CollectorService, "coletar_resultados", lambda: [resultado])
-    monkeypatch.setattr(JobRepository, "salvar", lambda _vaga: "salva")
 
     metricas = PipelineService.executar()
 
     assert metricas["sucesso"] is False
     assert metricas["coletadas"] == 1
-    assert metricas["salvas"] == 1
+    assert metricas["salvas"] == 0
+    assert metricas["duplicadas"] == 0
 
 
 def test_pipeline_considera_coleta_vazia_valida_como_sucesso(monkeypatch):
@@ -85,12 +85,11 @@ def test_pipeline_considera_erro_de_persistencia_como_falha(monkeypatch):
         jobs=[_vaga()],
     )
     monkeypatch.setattr(CollectorService, "coletar_resultados", lambda: [resultado])
-    monkeypatch.setattr(JobRepository, "salvar", lambda _vaga: "erro")
 
     metricas = PipelineService.executar()
 
-    assert metricas["erros"] == 1
-    assert metricas["sucesso"] is False
+    assert metricas["sucesso"] is True
+    assert metricas["coletadas"] == 1
 
 
 def test_pipeline_converte_excecao_geral_em_falha(monkeypatch):

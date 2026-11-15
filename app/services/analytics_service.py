@@ -1,6 +1,7 @@
 import pandas as pd
 from sqlalchemy import text
 from database.connection import engine
+from services.export_service import ExportService
 
 
 class AnalyticsService:
@@ -29,9 +30,9 @@ class AnalyticsService:
             SELECT
                 senioridade AS label,
                 COUNT(*)    AS total
-            FROM jobs
-            WHERE senioridade != 'Não informado'
-              AND senioridade IS NOT NULL
+            FROM gold.mart_vagas
+            WHERE senioridade IS NOT NULL
+              AND senioridade != 'Não informado'
             GROUP BY senioridade
             ORDER BY total DESC
         """
@@ -48,7 +49,7 @@ class AnalyticsService:
             SELECT
                 localizacao AS label,
                 COUNT(*)    AS total
-            FROM jobs
+            FROM gold.mart_vagas
             WHERE localizacao NOT IN ('Não informado', 'Remoto', 'Híbrido')
               AND localizacao IS NOT NULL
             GROUP BY localizacao
@@ -76,7 +77,7 @@ class AnalyticsService:
                     ELSE 'Presencial'
                 END AS label,
                 COUNT(*) AS total
-            FROM jobs
+            FROM gold.mart_vagas
             GROUP BY label
             ORDER BY total DESC
         """
@@ -86,15 +87,16 @@ class AnalyticsService:
     def top_tecnologias(cls, top_n: int = 15) -> pd.DataFrame:
         """
         Top N tecnologias mais mencionadas nas vagas.
-        Faz o join com a tabela de relacionamento many-to-many.
+        Utiliza a coluna tecnologias do mart Gold, que contém os termos
+        separados por vírgula extraídos das descrições.
         """
         sql = f"""
             SELECT
-                t.nome  AS label,
+                unnest(string_to_array(tecnologias, ',')) AS label,
                 COUNT(*) AS total
-            FROM technologies t
-            JOIN job_technologies jt ON jt.technology_id = t.id
-            GROUP BY t.nome
+            FROM gold.mart_vagas
+            WHERE tecnologias IS NOT NULL AND tecnologias != ''
+            GROUP BY label
             ORDER BY total DESC
             LIMIT {top_n}
         """
@@ -107,7 +109,7 @@ class AnalyticsService:
             SELECT
                 origem   AS label,
                 COUNT(*) AS total
-            FROM jobs
+            FROM gold.mart_vagas
             GROUP BY origem
             ORDER BY total DESC
         """
@@ -127,7 +129,7 @@ class AnalyticsService:
                     ELSE                                'Não informado'
                 END AS label,
                 COUNT(*) AS total
-            FROM jobs
+            FROM gold.mart_vagas
             GROUP BY label
             ORDER BY total DESC
         """
@@ -144,12 +146,12 @@ class AnalyticsService:
                 COUNT(*)                        AS total_vagas,
                 COUNT(DISTINCT empresa)         AS total_empresas,
                 COUNT(DISTINCT origem)          AS total_portais
-            FROM jobs
+            FROM gold.mart_vagas
         """
         df = cls._query(sql)
         row = df.iloc[0]
 
-        # Total de tecnologias vem de outra tabela
+        # Total de tecnologias vem da tabela de tecnologias (historical)
         df_tech = cls._query("SELECT COUNT(*) AS total FROM technologies")
         total_tech = int(df_tech.iloc[0]["total"])
 

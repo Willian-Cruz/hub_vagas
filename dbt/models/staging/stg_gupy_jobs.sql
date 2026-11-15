@@ -1,1 +1,1 @@
-{{ select_bronze_jobs('Gupy') }}
+{{ select_raw_jobs('Gupy') }}

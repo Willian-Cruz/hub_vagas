@@ -1,1 +1,1 @@
-{{ select_bronze_jobs('Vagas.com') }}
+{{ select_raw_jobs('Vagas.com') }}

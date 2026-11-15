@@ -10,11 +10,9 @@ with source_rows as (
 
 cleaned as (
     select
-        bronze_observation_id,
-        run_id,
+        raw_job_id,
         origem,
-        coalesce(nullif(trim(source_job_id), ''), nullif(trim(link), '')) as source_job_id,
-        coalesce(nullif(trim(link), ''), nullif(trim(source_job_id), '')) as link,
+        coalesce(nullif(trim(link), ''), nullif(trim(link), '')) as link,
         id_externo,
         {{ null_if_placeholder('titulo') }} as titulo,
         {{ null_if_placeholder('empresa') }} as empresa,
@@ -27,17 +25,14 @@ cleaned as (
         {{ null_if_placeholder('escolaridade') }} as escolaridade,
         data_publicacao,
         qtd_posicoes,
-        collected_at as data_coleta,
-        payload_hash
+        data_coleta
     from source_rows
 ),
 
 normalized as (
     select
-        bronze_observation_id,
-        run_id,
+        raw_job_id,
         origem,
-        source_job_id,
         link,
         id_externo,
         titulo,
@@ -59,12 +54,11 @@ normalized as (
         escolaridade,
         data_publicacao,
         qtd_posicoes,
-        data_coleta,
-        payload_hash
+        data_coleta
     from cleaned
-    -- Sem título e sem identificador a vaga não é utilizável; a Bronze mantém o registro
+    -- Sem título e sem link a vaga não é utilizável
     where titulo is not null
-      and coalesce(source_job_id, link) is not null
+      and link is not null
 ),
 
 keyed as (
@@ -83,7 +77,7 @@ keyed as (
                     || '|' || {{ fold_text('empresa') }}
                     || '|' || {{ fold_text('localizacao') }}
         end as chave_conteudo,
-        coalesce(id_externo, source_job_id) as chave_portal
+        coalesce(id_externo, link) as chave_portal
     from normalized
 ),
 
@@ -92,7 +86,7 @@ latest_per_portal_id as (
         *,
         row_number() over (
             partition by origem, chave_portal
-            order by data_coleta desc, bronze_observation_id desc
+            order by data_coleta desc, raw_job_id desc
         ) as portal_rank
     from keyed
 ),
@@ -108,19 +102,17 @@ ranked as (
             when chave_conteudo is null then 1
             else row_number() over (
                 partition by chave_conteudo
-                order by data_coleta desc, data_publicacao desc nulls last, bronze_observation_id desc
+                order by data_coleta desc, data_publicacao desc nulls last, raw_job_id desc
             )
         end as content_rank
     from latest
 )
 
 select
-    bronze_observation_id,
-    run_id,
+    raw_job_id,
     origem,
-    source_job_id,
-    id_externo,
     link,
+    id_externo,
     titulo,
     empresa,
     senioridade,
@@ -133,7 +125,6 @@ select
     qtd_posicoes,
     data_publicacao,
     chave_conteudo,
-    data_coleta,
-    payload_hash
+    data_coleta
 from ranked
 where content_rank = 1

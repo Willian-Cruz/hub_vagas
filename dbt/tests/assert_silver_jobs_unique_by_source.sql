@@ -1,4 +1,4 @@
-select origem, source_job_id, count(*) as registros
+select origem, link, count(*) as registros
 from {{ ref('jobs') }}
-group by origem, source_job_id
+group by origem, link
 having count(*) > 1

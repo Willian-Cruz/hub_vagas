@@ -1,7 +1,7 @@
-"""Ponto de entrada para executar a INGESTÃO de dados: scrape → Bronze (landing zone).
+"""Ponto de entrada para executar a INGESTÃO de dados: scrape → raw layer `jobs`.
 
-Responsabilidade única: coletar dados dos portais e gravá-los na camada Bronze.
-A transformação (Bronze → Silver → Gold) é executada separadamente via dbt:
+Responsabilidade única: coletar dados dos portais e gravá-los na tabela raw `jobs`.
+A transformação (raw → Bronze → Silver → Gold) é executada separadamente via dbt:
     python app/transform.py
 
 Uso:
@@ -24,14 +24,14 @@ from database.models import base
 from database.job_model import Job  # registra o modelo no metadata
 from database.tech_model import Technology  # registra o modelo no metadata
 from database.job_tech_model import job_technologies  # registra a associação
-from database.bronze_model import JobObservation, ScrapeRun  # registra Bronze
+from database.bronze_model import ScrapeRun  # registra Bronze (scrape_runs)
 from services.pipeline_service import PipelineService
 
 
 def main() -> int:
-    """Executa a ingestão: scrape → Bronze.
+    """Executa a ingestão: scrape → raw layer `jobs`.
 
-    Não executa dbt nem mantém a tabela legacy `jobs`.
+    Não executa dbt.
     Para transformação, use `python app/transform.py`.
     """
     if ensure_local_database_exists():

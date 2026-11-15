@@ -1,5 +1,6 @@
 import main
-from repositories.job_repository import JobRepository
+from repositories.bronze_repository import BronzeRepository
+from repositories.job_repository import DUPLICADA, ERRO, JobRepository, SALVA
 from schemas.job_schema import JobSchema
 from scrapers.base_scraper import ScrapeResult, ScrapeStatus
 from services.collector_service import CollectorService
@@ -15,6 +16,17 @@ def _vaga():
     )
 
 
+def _mock_persistence(monkeypatch):
+    """Mocka JobRepository.salvar e BronzeRepository.persistir_resultados."""
+    monkeypatch.setattr(JobRepository, "salvar", lambda vaga: SALVA)
+    monkeypatch.setattr(
+        BronzeRepository, "persistir_resultados",
+        lambda resultados, run_id, started_at, finished_at=None: len(
+            [v for r in resultados for v in r.jobs]
+        ),
+    )
+
+
 def test_pipeline_registra_falha_da_fonte(monkeypatch):
     resultado = ScrapeResult(
         source="InfoJobs",
@@ -22,6 +34,7 @@ def test_pipeline_registra_falha_da_fonte(monkeypatch):
         error="certificado TLS inválido",
     )
     monkeypatch.setattr(CollectorService, "coletar_resultados", lambda: [resultado])
+    _mock_persistence(monkeypatch)
 
     metricas = PipelineService.executar()
 
@@ -47,11 +60,13 @@ def test_pipeline_persiste_vagas_parciais_e_marca_falha(monkeypatch):
         error="falha ao buscar a página seguinte",
     )
     monkeypatch.setattr(CollectorService, "coletar_resultados", lambda: [resultado])
+    _mock_persistence(monkeypatch)
 
     metricas = PipelineService.executar()
 
     assert metricas["sucesso"] is False
     assert metricas["coletadas"] == 1
+    assert metricas["raw_salvas"] == 1
     assert metricas["bronze_ok"] is True
 
 
@@ -62,6 +77,7 @@ def test_pipeline_considera_coleta_vazia_valida_como_sucesso(monkeypatch):
         pages_processed=1,
     )
     monkeypatch.setattr(CollectorService, "coletar_resultados", lambda: [resultado])
+    _mock_persistence(monkeypatch)
 
     metricas = PipelineService.executar()
 
@@ -71,6 +87,7 @@ def test_pipeline_considera_coleta_vazia_valida_como_sucesso(monkeypatch):
 
 def test_pipeline_sem_fontes_marca_execucao_como_falha(monkeypatch):
     monkeypatch.setattr(CollectorService, "coletar_resultados", lambda: [])
+    _mock_persistence(monkeypatch)
 
     metricas = PipelineService.executar()
 
@@ -84,11 +101,13 @@ def test_pipeline_considera_erro_de_persistencia_como_falha(monkeypatch):
         jobs=[_vaga()],
     )
     monkeypatch.setattr(CollectorService, "coletar_resultados", lambda: [resultado])
+    _mock_persistence(monkeypatch)
 
     metricas = PipelineService.executar()
 
     assert metricas["sucesso"] is True
     assert metricas["coletadas"] == 1
+    assert metricas["raw_salvas"] == 1
 
 
 def test_pipeline_converte_excecao_geral_em_falha(monkeypatch):
@@ -96,6 +115,7 @@ def test_pipeline_converte_excecao_geral_em_falha(monkeypatch):
         raise RuntimeError("falha inesperada")
 
     monkeypatch.setattr(CollectorService, "coletar_resultados", falhar)
+    _mock_persistence(monkeypatch)
 
     metricas = PipelineService.executar()
 

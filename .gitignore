@@ -10,6 +10,7 @@ env/
 # =========================
 .env
 .env.*
+.kilo
 
 # Permite versionar o exemplo
 !.env.example

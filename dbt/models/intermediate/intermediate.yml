@@ -10,8 +10,8 @@ models:
           - accepted_values:
               arguments:
                 values: ["Vagas.com", "InfoJobs", "Gupy"]
-      - name: source_job_id
-        tests: [not_null]
+      - name: raw_job_id
+        tests: [not_null, unique]
       - name: link
         tests: [not_null]
       - name: data_coleta

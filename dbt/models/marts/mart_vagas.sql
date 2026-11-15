@@ -5,7 +5,7 @@ with tecnologias (tecnologia) as (
 mentions as (
     select
         jobs.origem,
-        jobs.source_job_id,
+        jobs.link as source_job_id,
         tecnologias.tecnologia
     from {{ ref('jobs') }} as jobs
     cross join tecnologias
@@ -13,7 +13,7 @@ mentions as (
 )
 
 select
-    jobs.bronze_observation_id as id,
+    jobs.raw_job_id as id,
     jobs.titulo,
     jobs.empresa,
     jobs.senioridade,
@@ -36,9 +36,9 @@ select
 from {{ ref('jobs') }} as jobs
 left join mentions
     on mentions.origem = jobs.origem
-   and mentions.source_job_id = jobs.source_job_id
+   and mentions.source_job_id = jobs.link
 group by
-    jobs.bronze_observation_id,
+    jobs.raw_job_id,
     jobs.titulo,
     jobs.empresa,
     jobs.senioridade,

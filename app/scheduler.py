@@ -1,5 +1,5 @@
 """
-Ponto de entrada para execução automática agendada do pipeline.
+Ponto de entrada para execução automática agendada da INGESTÃO de dados.
 
 Uso padrão (todo dia às 06:00, horário de São Paulo):
     python app/scheduler.py
@@ -12,12 +12,15 @@ Modo intervalo — útil para testes (ex: a cada 2 horas):
 
 O processo ficará ativo aguardando o próximo ciclo.
 Pressione Ctrl+C para encerrar.
+
+Para executar a transformação (dbt) separadamente:
+    python app/transform.py
 """
 import sys
 import os
 import argparse
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from database.connection import (
     engine,
@@ -37,7 +40,7 @@ logger = get_logger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Hub Vagas — agendador de pipeline"
+        description="Hub Vagas — agendador de ingestão de dados"
     )
     parser.add_argument(
         "--hora",
@@ -58,9 +61,9 @@ def parse_args():
         help    = "Executa a cada N horas (modo debug). Ignora --hora e --minuto",
     )
     parser.add_argument(
-        "--com-dbt",
+        "--com-transformacao",
         action="store_true",
-        help="Executa dbt build após cada coleta bem-sucedida na Bronze",
+        help="Após cada coleta bem-sucedida na Bronze, executa dbt build (transform.py)",
     )
     return parser.parse_args()
 
@@ -81,11 +84,11 @@ if __name__ == "__main__":
         logger.info(f"Modo intervalo: a cada {args.intervalo}h")
         SchedulerService.iniciar_por_intervalo(
             horas=args.intervalo,
-            executar_dbt=args.com_dbt,
+            executar_transformacao=args.com_transformacao,
         )
     else:
         SchedulerService.iniciar_diario(
             hora=args.hora,
             minuto=args.minuto,
-            executar_dbt=args.com_dbt,
+            executar_transformacao=args.com_transformacao,
         )

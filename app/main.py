@@ -1,4 +1,12 @@
-"""Ponto de entrada para executar uma coleta e persistência do pipeline."""
+"""Ponto de entrada para executar a INGESTÃO de dados: scrape → Bronze (landing zone).
+
+Responsabilidade única: coletar dados dos portais e gravá-los na camada Bronze.
+A transformação (Bronze → Silver → Gold) é executada separadamente via dbt:
+    python app/transform.py
+
+Uso:
+    python app/main.py
+"""
 import os
 import sys
 
@@ -20,7 +28,12 @@ from database.bronze_model import JobObservation, ScrapeRun  # registra Bronze
 from services.pipeline_service import PipelineService
 
 
-def main(executar_dbt: bool = False) -> int:
+def main() -> int:
+    """Executa a ingestão: scrape → Bronze.
+
+    Não executa dbt nem mantém a tabela legacy `jobs`.
+    Para transformação, use `python app/transform.py`.
+    """
     if ensure_local_database_exists():
         print("Banco local criado com sucesso!")
 
@@ -29,14 +42,8 @@ def main(executar_dbt: bool = False) -> int:
     print("Banco verificado/criado com sucesso!")
 
     metricas = PipelineService.executar()
-    if executar_dbt and metricas.get("bronze_ok"):
-        from run_dbt import main as executar_transformacoes
-
-        print("Executando modelos e testes dbt...")
-        codigo_dbt = executar_transformacoes(["build"])
-        return 0 if codigo_dbt == 0 and metricas["sucesso"] else 1
     return 0 if metricas["sucesso"] else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(executar_dbt=True))
+    raise SystemExit(main())

@@ -52,8 +52,7 @@ def test_pipeline_persiste_vagas_parciais_e_marca_falha(monkeypatch):
 
     assert metricas["sucesso"] is False
     assert metricas["coletadas"] == 1
-    assert metricas["salvas"] == 0
-    assert metricas["duplicadas"] == 0
+    assert metricas["bronze_ok"] is True
 
 
 def test_pipeline_considera_coleta_vazia_valida_como_sucesso(monkeypatch):

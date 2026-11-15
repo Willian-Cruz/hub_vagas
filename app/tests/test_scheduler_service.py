@@ -136,8 +136,8 @@ class TestExecutarPipeline:
 
     def test_chama_pipeline_service(self):
         metricas = {
-            "coletadas": 10, "salvas": 8, "duplicadas": 2,
-            "erros": 0, "duracao_seg": 5.0, "sucesso": True,
+            "coletadas": 10, "bronze_salvas": 8, "bronze_ok": True,
+            "duracao_seg": 5.0, "sucesso": True,
         }
         with patch(
             "services.pipeline_service.PipelineService.executar",

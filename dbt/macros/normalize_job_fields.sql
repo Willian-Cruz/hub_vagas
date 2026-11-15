@@ -15,18 +15,36 @@ end
 {% endmacro %}
 
 {# include_tecnico = false para inferir pelo título: lá "técnico" costuma ser o
-   tipo de trabalho ("Suporte Técnico"), não o nível. #}
+   tipo de trabalho ("Suporte Técnico"), não o nível.
+   O PostgreSQL não tem lookahead: "pl" só vira Pleno quando não é PL/SQL nem PL-300. #}
 {% macro normalize_seniority(column_name, include_tecnico=true) %}
 case
     when {{ column_name }} is null then null
     when {{ column_name }} ~* '\y(jr|j[uú]nior)\y' then 'Júnior'
-    when {{ column_name }} ~* '\y(pl|pleno)\y' then 'Pleno'
+    when {{ column_name }} ~* '\ypleno\y' then 'Pleno'
+    when {{ column_name }} ~* '\ymid[- ]?level\y' then 'Pleno'
+    when {{ column_name }} ~* '\ypl\y'
+         and {{ column_name }} !~* '\ypl\s*[/-]?\s*sql\y'
+         and {{ column_name }} !~* '\ypl[/-]\s*[0-9]'
+         then 'Pleno'
     when {{ column_name }} ~* '\y(sr|s[eê]nior)\y' then 'Sênior'
     when {{ column_name }} ~* '\y(especialista|specialist)\y' then 'Especialista'
     when {{ column_name }} ~* '\y(coordena[cç][aã]o|coordenadora?|coordinator|supervis[aã]o|supervisora?)\y' then 'Coordenador'
-    when {{ column_name }} ~* '\y(gerente|ger[eê]ncia|manager|l[ií]der|leader|lead)\y' then 'Liderança'
+    when {{ column_name }} ~* '\y(gerente|ger[eê]ncia|manager|l[ií]deran[cç]a|l[ií]der|leader|lead)\y' then 'Liderança'
     when {{ column_name }} ~* '\y(diretora?|diretoria|director|head|vp)\y' then 'Diretoria'
     when {{ column_name }} ~* '\y(trainee|est[aá]gi[oó]s?|estagi[aá]ri[oa]s?)\y' then 'Estágio/Trainee'
+    -- Os próprios rótulos são aceitos como entrada: "Liderança" não casa com nenhuma
+    -- palavra da regra acima, então um nível já classificado assim virava NULL.
+    -- O `fold_text` tira acentos e minúscula, espelhando o sem_acentos().casefold()
+    -- do Python: "Liderança" e "Lideranca" batem no mesmo valor.
+    when {{ fold_text(column_name) }} = 'estagio/trainee' then 'Estágio/Trainee'
+    when {{ fold_text(column_name) }} = 'junior' then 'Júnior'
+    when {{ fold_text(column_name) }} = 'pleno' then 'Pleno'
+    when {{ fold_text(column_name) }} = 'senior' then 'Sênior'
+    when {{ fold_text(column_name) }} = 'especialista' then 'Especialista'
+    when {{ fold_text(column_name) }} = 'coordenador' then 'Coordenador'
+    when {{ fold_text(column_name) }} = 'lideranca' then 'Liderança'
+    when {{ fold_text(column_name) }} = 'diretoria' then 'Diretoria'
     {% if include_tecnico %}
     when {{ column_name }} ~* '\yt[eé]cnic[oa]\y' then 'Técnico'
     {% endif %}
@@ -95,7 +113,8 @@ end
 {% macro fold_text(column_name) %}
 regexp_replace(
     translate(lower(btrim({{ column_name }})),
-              'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn'),
+              'áàâãäéèêëíìîïóòôõöúùûüçñÇ',
+              'aaaaaeeeeiiiiooooouuuucnn'),
     '\s+', ' ', 'g'
 )
 {% endmacro %}

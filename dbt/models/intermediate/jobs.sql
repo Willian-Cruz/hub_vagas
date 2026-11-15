@@ -42,10 +42,14 @@ normalized as (
         id_externo,
         titulo,
         empresa,
-        -- Nível do portal tem prioridade; sem ele, infere do título
+        -- Nível do portal tem prioridade; sem ele, infere do título; por fim, cascata completa
+        {% set np = normalize_seniority('senioridade_raw') %}
+        {% set tt = normalize_seniority('titulo', include_tecnico=false) %}
+        {% set cascade = classify_seniority_cascade('senioridade_raw', 'titulo', 'experiencia', 'descricao') %}
         coalesce(
-            {{ normalize_seniority('senioridade_raw') }},
-            {{ normalize_seniority('titulo', include_tecnico=false) }}
+            {{ np }},
+            {{ tt }},
+            {{ cascade }}
         ) as senioridade,
         {{ normalize_location('localizacao_raw') }} as localizacao,
         descricao,

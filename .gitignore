@@ -113,3 +113,5 @@ test-results/
 debug_*.html
 debug_*.png
 *.patch
+# Documentos
+docs/

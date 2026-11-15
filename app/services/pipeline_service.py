@@ -4,8 +4,7 @@ PipelineService — orquestra uma execução completa do pipeline.
 Responsabilidades:
     1. Coleta vagas via CollectorService (todos os scrapers)
     2. Grava payloads e status de fontes na camada Bronze
-    3. Atualiza a tabela legada `jobs` durante a migração
-    4. Registra início, fim, duração e erros no log
+    3. Registra início, fim, duração e erros no log
 
 Por que separar do main.py?
     O main.py se torna apenas um ponto de entrada manual.
@@ -127,26 +126,6 @@ class PipelineService:
                 metricas["erros"] += 1
                 logger.exception("Falha ao persistir a camada Bronze")
 
-            # ── 3. Persistência legada durante a transição ─────────────
-            logger.info("Etapa 3/3: Atualizando a tabela legada jobs...")
-            if bronze_ok:
-                for vaga in vagas:
-                    resultado = JobRepository.salvar(vaga)
-
-                    if resultado == "salva":
-                        metricas["salvas"] += 1
-                    elif resultado == "duplicada":
-                        metricas["duplicadas"] += 1
-                    else:
-                        metricas["erros"] += 1
-
-            logger.info(
-                f"Persistência concluída — "
-                f"Salvas: {metricas['salvas']} | "
-                f"Duplicadas: {metricas['duplicadas']} | "
-                f"Erros: {metricas['erros']}"
-            )
-
             metricas["sucesso"] = (
                 bronze_ok
                 and metricas["erros"] == 0
@@ -171,8 +150,6 @@ class PipelineService:
                 f"Coletadas: {metricas['coletadas']} | "
                 f"Descartadas: {metricas['descartadas']} | "
                 f"Bronze: {metricas['bronze_salvas']} | "
-                f"Salvas: {metricas['salvas']} | "
-                f"Duplicadas: {metricas['duplicadas']} | "
                 f"Erros: {metricas['erros']}"
             )
             logger.info("=" * 60)

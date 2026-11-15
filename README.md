@@ -101,7 +101,13 @@ erDiagram
 - **Campo sem informação é `NULL`.** Os scrapers do Vagas.com e do InfoJobs já devolvem `None` para "Confidencial", "Localização não informada" e similares, e a Silver trata os mesmos textos vindos de qualquer fonte. No Power BI, trate `NULL` como "(Em branco)".
 - **Relevância.** Os portais buscam por palavras soltas, então "engenheiro de dados" também devolve engenharia civil e vendas. A vaga só passa se o título citar um termo de `RelevanceService.TERMOS_TITULO` (dados, data, analytics, BI, ETL, dbt, SQL, Python, Spark, Airflow, Databricks, Snowflake, BigQuery e outros), como palavra inteira. As descartadas não chegam à Bronze; só a contagem é registrada. A Gupy busca por termos próprios e ainda não passa por esse filtro.
 - **Deduplicação.** Na Silver: uma vaga por `id_externo` (sem ele, pelo link), mantendo a observação mais recente, e uma vaga por portal + título + empresa + local, sem acento nem diferença de caixa. A chave de conteúdo só existe quando empresa e local são conhecidos, para não juntar vagas diferentes. Na tabela `jobs` valem as regras da etapa Legado.
-- **Senioridade.** O nível do portal tem prioridade. Sem ele, é inferido do título. Valores: Estágio/Trainee, Júnior, Pleno, Sênior, Especialista, Coordenador, Liderança, Diretoria e Técnico (este só quando o portal informa).
+- **Senioridade.** O nível do portal tem prioridade. Sem ele, o `seniority_service` testa as evidências abaixo, em ordem, e fica com a primeira que acerta:
+  1. palavra de nível no título (mesma regra do `NormalizeService`, com algumas palavras a mais, como `mid-level` e `intern`, e sem ler "PL/SQL" ou "PL-300" como Pleno);
+  2. nível escrito na descrição, como "Nível: Pleno" ou "Analista de Dados Sênior";
+  3. campo de experiência do portal: menos de 3 anos é Júnior, de 3 a 4 é Pleno e 5 ou mais é Sênior ("Sem experiência" é Júnior e "Só estágios" é Estágio/Trainee);
+  4. "N anos de experiência" na descrição, pela mesma faixa.
+
+  Sem nenhuma evidência, o campo fica `NULL`. Hoje o InfoJobs usa a cascata inteira; o parser da Catho usa só o título, porque o card não traz descrição nem experiência. A origem da decisão (`titulo`, `descricao_nivel`, `experiencia_campo` ou `descricao_anos`) vai em `senioridade_origem`, dentro do `source_payload` da Bronze. Valores: Estágio/Trainee, Júnior, Pleno, Sênior, Especialista, Coordenador, Liderança, Diretoria e Técnico (este só quando o portal informa).
 - **Modalidade.** Remoto, Híbrido ou Presencial. Quando o portal não informa, vem da localização ("Home Office" vira Remoto).
 - **Salário.** Vem do portal; sem ele, de um valor `R$` na descrição; "A combinar" quando o texto indica. O card do Vagas.com não traz salário.
 - **Datas.** `data_publicacao` é a data do portal (o Vagas.com informa "Há N dias", então a precisão é de dia; o InfoJobs informa a data exata). `data_coleta` é o momento da coleta. Na tabela `jobs`, a `data_coleta` anterior à migração `002` não é confiável (todas recebem o horário da migração); use `data_publicacao`.
@@ -120,9 +126,10 @@ hub_vagas/
 │   ├── database/              # conexão e modelos SQLAlchemy (Bronze e tabelas legadas)
 │   ├── repositories/          # bronze_repository, job_repository, tech_repository
 │   ├── schemas/job_schema.py  # validação Pydantic
-│   ├── scrapers/              # base_scraper, vagas_scraper, infojobs_scraper, gupy_scraper
+│   ├── scrapers/              # base_scraper, vagas_scraper, infojobs_scraper, gupy_scraper,
+│   │                          # catho_parser, parser_utils
 │   ├── services/              # analytics, collector, export, job, normalize, pipeline,
-│   │                          # relevance, salary, scheduler, tech
+│   │                          # relevance, salary, scheduler, seniority, tech
 │   ├── tests/                 # testes + conftest.py (banco mockado) + fixtures/ (HTML real dos portais)
 │   ├── utils/                 # logger (rotação de arquivo), text_utils, date_utils
 │   ├── debug_vagas.py         # diagnóstico visual do scraper do Vagas.com
@@ -149,9 +156,10 @@ hub_vagas/
 | Portal | Coleta | Situação |
 | --- | --- | --- |
 | Vagas.com | Playwright (scroll infinito) + BeautifulSoup | Implementado: ID, data de publicação, posições, local, nível e descrição do card. Salário só na página de detalhe |
-| InfoJobs | requests + BeautifulSoup, paginado | Implementado: salário, experiência, escolaridade, modalidade, data exata e ID |
+| InfoJobs | requests + BeautifulSoup, paginado | Implementado: salário, experiência, escolaridade, modalidade, data exata, ID e senioridade em cascata (título, descrição e experiência) |
 | Gupy | Playwright + BeautifulSoup, por termos de busca | Implementado, com calibração de seletores pendente (`app/scrapers/gupy_scraper.py`). Ainda não usa o filtro de relevância nem devolve `NULL`; a Silver trata os textos "Não informado" |
-| Catho, Remotar, Sólides | — | Próximos (mesmo contrato dos scrapers atuais) |
+| Catho | — | Parser dos cards pronto e testado com HTML real (`app/scrapers/catho_parser.py`): empresa, local, posições, salário, data e senioridade pelo título. Falta o scraper (busca, paginação e coleta) |
+| Remotar, Sólides | — | Próximos (mesmo contrato dos scrapers atuais) |
 | LinkedIn, Indeed, Glassdoor | — | Planejados |
 
 ## Tecnologias identificadas nas descrições
@@ -315,7 +323,7 @@ pytest tests/ -v
 Se o `pytest` do venv não for encontrado (acontece quando a pasta do projeto
 muda de lugar), use `python -m pytest tests/ -v`.
 
-A suíte usa um mock global do banco (`conftest.py`), então roda sem PostgreSQL. Os testes cobrem scrapers, normalização, salário, analytics, repositórios (inclusive deduplicação por ID e conteúdo e a gravação Bronze), relevância, pipeline, agendamento, exportação, `run_dbt` e configuração. Os parsers do Vagas.com e do InfoJobs também são testados contra **HTML real** dos portais (`app/tests/fixtures/`); quando um portal mudar o layout, salve os cards novos ali e ajuste `test_parsers_html_real.py`. Instale as dependências com `pip install -r requirements.txt` antes de executá-los.
+A suíte usa um mock global do banco (`conftest.py`), então roda sem PostgreSQL. Os testes cobrem scrapers, normalização, senioridade, salário, analytics, repositórios (inclusive deduplicação por ID e conteúdo e a gravação Bronze), relevância, pipeline, agendamento, exportação, `run_dbt` e configuração. Os parsers do Vagas.com, do InfoJobs e da Catho também são testados contra **HTML real** dos portais (`app/tests/fixtures/`); quando um portal mudar o layout, salve os cards novos ali e ajuste os testes do portal (`test_parsers_html_real.py`, `test_infojobs_scraper_nov2026.py` ou `test_catho_parser.py`). Instale as dependências com `pip install -r requirements.txt` antes de executá-los.
 
 O GitHub Actions roda o `pytest` a cada push e pull request na `main`. O
 `dbt build` não roda no CI porque precisa de um PostgreSQL; execute-o localmente
@@ -337,14 +345,16 @@ com `python app/run_dbt.py build`.
 | 10 (out/2026) | Correções de métricas do pipeline, código de saída do `main.py` e testes do repositório |
 | 11 | Camadas Bronze, Silver e Gold: coleta append-only em JSONB, transformações e testes de dados com dbt, exportação a partir do mart Gold e tabela `jobs` mantida como legado |
 | 12 (nov/2026) | Revisão dos scrapers do Vagas.com e InfoJobs com HTML real: campos vazios viram `NULL`, novos campos, filtro de relevância, deduplicação por ID e conteúdo (migração `004`). No dbt, `NULL`, campos novos e deduplicação na Silver. Correções na gravação Bronze, no `run_dbt.py` e na exportação para Excel |
+| 13 (nov/2026) | Senioridade em cascata (portal, título, descrição e experiência), com a origem registrada na Bronze; parser da Catho testado com HTML real; correções no InfoJobs: modalidade lida pelos três ícones do card (antes só "Presencial") e fragmento HTML original preservado na Bronze |
 
 ---
 
 ## Próximos passos
 
-- Calibrar os seletores do scraper da Gupy e aplicar a ele o filtro de relevância e o contrato de `NULL`
-- Buscar a página de detalhe da vaga (descrição completa e salário) nos portais que só mostram um resumo no card
-- Adicionar Catho, Remotar e Sólides, e depois LinkedIn, Indeed e Glassdoor
+- Calibrar os seletores do scraper da Gupy e aplicar a ele o filtro de relevância, o contrato de `NULL` e a cascata de senioridade
+- Corrigir a senioridade lida pelo pipeline (`NormalizeService` e macro `normalize_seniority`): "PL/SQL" e "PL-300" viram Pleno, e o rótulo "Liderança" não é reconhecido quando já vem pronto do scraper
+- Buscar a página de detalhe da vaga (descrição completa e salário) nos portais que só mostram um resumo no card; a senioridade inferida pela descrição também ganha com isso
+- Transformar o parser da Catho em scraper, adicionar Remotar e Sólides, e depois LinkedIn, Indeed e Glassdoor
 - Migrar o `AnalyticsService` para a Gold e aposentar a tabela `jobs`
 - Publicar prints do dashboard do Power BI neste README
 

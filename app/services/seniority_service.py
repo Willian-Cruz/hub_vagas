@@ -12,13 +12,14 @@ Sem evidência, o resultado é (None, None): o dado fica NULL, nunca um palpite.
 Guarde `origem` para auditar o que foi inferido: títulos e campos estruturados são confiáveis; as
 origens 3 e 5 leem texto livre e podem errar (a descrição do card é só um resumo de ~150 caracteres).
 
-Os rótulos e a regra do TÍTULO seguem o pipeline (NormalizeService.SENIORIDADE_MAP e a macro dbt
-normalize_seniority): mesmas palavras, na mesma ordem. Assim o mesmo título recebe o mesmo nível
-vindo de qualquer scraper e em qualquer camada. Quando duas palavras de nível aparecem juntas,
-vale a primeira da lista: "Pleno/Sênior" -> Pleno, "Gerente Sênior" -> Sênior. Diferenças
-propositais em relação ao pipeline, cobertas por tests/test_seniority_service.py:
-  - "PL/SQL", "PL-SQL", "PL SQL" e "PL-300" não são "Pleno" (o pipeline lê "PL" como Pleno);
-  - palavras a mais: mid-level, principal, aprendiz, intern, chief, vice-presidente, coord.
+Os rótulos e a regra do TÍTULO seguem o NormalizeService.SENIORIDADE_MAP: mesmas palavras,
+na mesma ordem. Assim o mesmo título recebe o mesmo nível vindo de qualquer scraper e na
+tabela jobs. Quando duas palavras de nível aparecem juntas, vale a primeira da lista:
+"Pleno/Sênior" -> Pleno, "Gerente Sênior" -> Sênior. "PL/SQL", "PL-SQL", "PL SQL" e "PL-300"
+não são Pleno, e o rótulo "Liderança" é aceito — no NormalizeService e na macro
+dbt normalize_seniority.
+Diferenças propositais em relação ao NormalizeService, cobertas por tests/test_seniority_service.py:
+  - palavras a mais: principal, aprendiz, intern, chief, vice-presidente, coord.
 """
 from __future__ import annotations
 

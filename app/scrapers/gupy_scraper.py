@@ -5,6 +5,8 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 from bs4 import BeautifulSoup
 from schemas.job_schema import JobSchema
 from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
+from services.relevance_service import RelevanceService
+from services.seniority_service import classificar_senioridade
 
 
 class GupyScraper(BaseScraper):
@@ -58,12 +60,6 @@ class GupyScraper(BaseScraper):
 
     JOB_LINK_PATTERN = re.compile(r"https?://[\w.-]+\.gupy\.io/jobs/\d+")
 
-    _SENIORIDADE_HINT = re.compile(
-        r"est[aá]gi[aá]rio|trainee|j[uú]nior|jr\.?|pleno|pl\.?|"
-        r"s[eê]nior|senior|sr\.?|especialista",
-        re.IGNORECASE,
-    )
-
     # ── Coleta ───────────────────────────────────────────────────────────
 
     @classmethod
@@ -105,6 +101,11 @@ class GupyScraper(BaseScraper):
             erros.append(str(erro))
 
         vagas = list(vagas_por_link.values())
+
+        # Aplicar filtro de relevância: só mantém vagas cujo título contenha
+        # um termo de dados (igual o RelevanceService faz em Vagas.com/InfoJobs)
+        vagas = [v for v in vagas if RelevanceService.eh_relevante(v.titulo)]
+
         if erros:
             status = ScrapeStatus.PARTIAL if vagas else ScrapeStatus.FAILED
         else:
@@ -209,7 +210,7 @@ class GupyScraper(BaseScraper):
             vagas.append(JobSchema(
                 titulo      = titulo,
                 empresa     = cls._empresa_da_url(link),
-                senioridade = cls._extrair_senioridade(titulo),
+                senioridade = cls._extrair_senioridade(titulo, descricao),
                 localizacao = localizacao,
                 descricao   = descricao,
                 link        = link,
@@ -244,7 +245,7 @@ class GupyScraper(BaseScraper):
             vagas.append(JobSchema(
                 titulo      = titulo,
                 empresa     = cls._empresa_da_url(link),
-                senioridade = cls._extrair_senioridade(titulo),
+                senioridade = cls._extrair_senioridade(titulo, "Não informado"),
                 localizacao = "Não informado",
                 descricao   = "Não informado",
                 link        = link,
@@ -265,11 +266,15 @@ class GupyScraper(BaseScraper):
         return subdominio.replace("-", " ").title() if subdominio else "Não informado"
 
     @classmethod
-    def _extrair_senioridade(cls, titulo: str) -> str:
-        """Puxa a palavra de senioridade do título (normalização real fica no pipeline)."""
+    def _extrair_senioridade(cls, titulo: str, descricao: str | None = None) -> str | None:
+        """Usa a cascata completa do seniority_service em vez de regex isolada.
 
-        match = cls._SENIORIDADE_HINT.search(titulo)
-        return match.group(0) if match else "Não informado"
+        Tradução da regra: portal → título → nível explícito na descrição →
+        campo de experiência → anos na descrição. Retorna None quando não há
+        evidência (em vez de 'Não informado').
+        """
+        result = classificar_senioridade(titulo, descricao=descricao)
+        return result.nivel  # tipo str | None
 
     @staticmethod
     def _parece_local(texto: str) -> bool:

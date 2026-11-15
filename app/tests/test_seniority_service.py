@@ -123,20 +123,13 @@ def test_os_rotulos_sao_aceitos_como_entrada(rotulo):
     assert classificar_senioridade("Analista", nivel_portal=rotulo) == Senioridade(rotulo, "portal")
 
 
-@pytest.mark.parametrize("rotulo", [ESTAGIO, JUNIOR, PLENO, SENIOR, ESPECIALISTA, COORDENADOR, DIRETORIA])
+@pytest.mark.parametrize(
+    "rotulo",
+    [ESTAGIO, JUNIOR, PLENO, SENIOR, ESPECIALISTA, COORDENADOR, LIDERANCA, DIRETORIA],
+)
 def test_rotulo_gerado_sobrevive_a_normalizacao_do_pipeline(rotulo):
-    # O JobRepository e o Silver normalizam o que o scraper entrega; o rótulo tem de voltar igual.
+    # O JobRepository normaliza o que o scraper entrega; o rótulo tem de voltar igual.
     assert NormalizeService.normalizar_senioridade(rotulo) == rotulo
-
-
-def test_lideranca_so_sai_do_titulo_e_o_pipeline_refaz_a_partir_dele():
-    # A normalização do pipeline não reconhece o rótulo "Liderança" como entrada. Aqui isso não
-    # perde dado: ele só é gerado por palavras do título (gerente, líder, lead...) que o próprio
-    # pipeline lê, e o JobRepository/Silver recorrem ao título quando o campo não é reconhecido.
-    titulo = "Gerente de Dados"
-    assert classificar_senioridade(titulo) == Senioridade(LIDERANCA, "titulo")
-    final = NormalizeService.normalizar_senioridade(LIDERANCA) or NormalizeService.normalizar_senioridade(titulo, de_titulo=True)
-    assert final == LIDERANCA
 
 
 @pytest.mark.parametrize(

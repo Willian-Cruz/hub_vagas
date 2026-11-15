@@ -17,15 +17,17 @@ class NormalizeService:
     # A ordem importa: o primeiro padrão que casar vence.
     # Todos usam limite de palavra (\b): sem isso "pl" casava dentro de
     # "Supply" e "sr" dentro de outras palavras.
+    # "pl" sozinho é Pleno; "PL/SQL", "PL-SQL", "PL SQL" e "PL-300" não.
+    # "Liderança" entra no mapa: "líder" não casa dentro dessa palavra.
     # _____________________________________________________
     SENIORIDADE_MAP = [
         (r"\b(?:jr|j[uú]nior)\b",                                   "Júnior"),   # 'Júnior/Trainee' → Júnior
-        (r"\b(?:pl|pleno)\b",                                       "Pleno"),
+        (r"\bpleno\b|\bmid[- ]?level\b|\bpl\b(?!\s*[/-]?\s*sql\b|[/-]\s*\d)", "Pleno"),
         (r"\b(?:sr|s[eê]nior)\b",                                   "Sênior"),
         (r"\b(?:especialista|specialist)\b",                        "Especialista"),
         (r"\b(?:coordena[cç][aã]o|coordenador(?:a)?|coordinator|"
          r"supervis[aã]o|supervisor(?:a)?)\b",                      "Coordenador"),
-        (r"\b(?:gerente|ger[eê]ncia|manager|l[ií]der|lider|leader|lead)\b", "Liderança"),
+        (r"\b(?:gerente|ger[eê]ncia|manager|l[ií]deran[cç]a|l[ií]der|lider|leader|lead)\b", "Liderança"),
         (r"\b(?:diretor(?:a)?|diretoria|director|head|vp)\b",       "Diretoria"),
         (r"\b(?:trainee|est[aá]gi[oó]s?|estagi[aá]ri[oa]s?)\b",     "Estágio/Trainee"),
         (r"\bt[eé]cnic[oa]\b",                                      "Técnico"),

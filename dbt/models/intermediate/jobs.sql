@@ -69,13 +69,14 @@ keyed as (
             case when localizacao in ('Remoto', 'Híbrido') then localizacao end
         ) as modalidade,
         -- Mesma vaga republicada com outro ID: título + empresa + local.
-        -- Sem empresa ou local a chave fica NULL (não junta vagas diferentes).
+        -- Permite dedup por conteúdo mesmo quando empresa OU localização estiver faltando,
+        -- usando placeholder consistente para campos ausentes para evitar falsos positivos.
         case
-            when empresa is not null and localizacao is not null
+            when empresa is not null or localizacao is not null
                 then origem
                     || '|' || {{ fold_text('titulo') }}
-                    || '|' || {{ fold_text('empresa') }}
-                    || '|' || {{ fold_text('localizacao') }}
+                    || '|' || coalesce({{ fold_text('empresa') }}, '__SEM_EMPRESA__')
+                    || '|' || coalesce({{ fold_text('localizacao') }}, '__SEM_LOCAL__')
         end as chave_conteudo,
         coalesce(id_externo, link) as chave_portal
     from normalized

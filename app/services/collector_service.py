@@ -1,9 +1,11 @@
 from time import perf_counter
 
 from scrapers.base_scraper import ScrapeResult, ScrapeStatus
+from scrapers.catho_scraper import CathoScraper
 from scrapers.gupy_scraper import GupyScraper
 from scrapers.infojobs_scraper import InfoJobsScraper
 from scrapers.vagas_scraper import VagasScraper
+from services.relevance_service import RelevanceService
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -12,7 +14,7 @@ logger = get_logger(__name__)
 class CollectorService:
     """Executa os scrapers e preserva um resultado por fonte."""
 
-    SCRAPERS = [VagasScraper, InfoJobsScraper, GupyScraper]
+    SCRAPERS = [VagasScraper, InfoJobsScraper, GupyScraper, CathoScraper]
 
     @classmethod
     def coletar_resultados(cls) -> list[ScrapeResult]:
@@ -30,6 +32,17 @@ class CollectorService:
                         f"{scraper.__name__}.coletar() deve retornar ScrapeResult, "
                         f"recebido: {type(resultado).__name__}"
                     )
+
+                # Aplicar filtro de relevância centralizado
+                relevantes, descartadas = RelevanceService.separar(resultado.jobs)
+                resultado = ScrapeResult(
+                    source=resultado.source,
+                    status=resultado.status,
+                    jobs=relevantes,
+                    pages_processed=resultado.pages_processed,
+                    error=resultado.error,
+                    discarded=(resultado.discarded or 0) + len(descartadas),
+                )
 
                 resultados.append(resultado)
                 logger.info(

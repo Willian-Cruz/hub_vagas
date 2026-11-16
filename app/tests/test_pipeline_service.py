@@ -51,7 +51,7 @@ def test_pipeline_registra_falha_da_fonte(monkeypatch):
     ]
 
 
-def test_pipeline_persiste_vagas_parciais_e_marca_falha(monkeypatch):
+def test_pipeline_persiste_vagas_parciais_como_sucesso(monkeypatch):
     resultado = ScrapeResult(
         source="InfoJobs",
         status=ScrapeStatus.PARTIAL,
@@ -64,13 +64,15 @@ def test_pipeline_persiste_vagas_parciais_e_marca_falha(monkeypatch):
 
     metricas = PipelineService.executar()
 
-    assert metricas["sucesso"] is False
+    assert metricas["sucesso"] is True  # PARTIAL com vagas = sucesso
     assert metricas["coletadas"] == 1
     assert metricas["raw_salvas"] == 1
     assert metricas["bronze_ok"] is True
+    assert metricas["fontes_parcial"] == 1
+    assert metricas["fontes_falha"] == 0
 
 
-def test_pipeline_considera_coleta_vazia_valida_como_sucesso(monkeypatch):
+def test_pipeline_considera_coleta_vazia_como_falha(monkeypatch):
     resultado = ScrapeResult(
         source="Vagas.com",
         status=ScrapeStatus.EMPTY,
@@ -81,8 +83,9 @@ def test_pipeline_considera_coleta_vazia_valida_como_sucesso(monkeypatch):
 
     metricas = PipelineService.executar()
 
-    assert metricas["sucesso"] is True
+    assert metricas["sucesso"] is False  # EMPTY sem vagas = falha
     assert metricas["coletadas"] == 0
+    assert metricas["fontes_vazio"] == 1
 
 
 def test_pipeline_sem_fontes_marca_execucao_como_falha(monkeypatch):

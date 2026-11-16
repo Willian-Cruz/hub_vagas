@@ -1,0 +1,89 @@
+name: dbt CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  dbt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hub_vagas_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install dbt-postgres
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              break
+            fi
+            echo "Waiting for PostgreSQL... ($i/30)"
+            sleep 2
+          done
+
+      - name: Create database schema
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d hub_vagas_test -c "CREATE SCHEMA IF NOT EXISTS public;"
+
+      - name: Set dbt environment variables
+        run: |
+          echo "DBT_HOST=localhost" >> $GITHUB_ENV
+          echo "DBT_USER=postgres" >> $GITHUB_ENV
+          echo "DBT_PASSWORD=postgres" >> $GITHUB_ENV
+          echo "DBT_PORT=5432" >> $GITHUB_ENV
+          echo "DBT_DATABASE=hub_vagas_test" >> $GITHUB_ENV
+          echo "DBT_SCHEMA=public" >> $GITHUB_ENV
+          echo "DBT_SSLMODE=disable" >> $GITHUB_ENV
+          echo "DBT_THREADS=2" >> $GITHUB_ENV
+
+      - name: Run dbt debug
+        working-directory: ./dbt
+        run: |
+          dbt debug --profiles-dir .
+
+      - name: Run dbt deps
+        working-directory: ./dbt
+        run: |
+          dbt deps --profiles-dir .
+
+      - name: Run dbt build
+        working-directory: ./dbt
+        run: |
+          dbt build --profiles-dir .
+
+      - name: Run dbt test
+        working-directory: ./dbt
+        run: |
+          dbt test --profiles-dir .

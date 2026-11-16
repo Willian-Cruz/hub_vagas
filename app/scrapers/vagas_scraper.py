@@ -82,14 +82,13 @@ class VagasScraper(BaseScraper):
                         html = page.content()
                         jobs, invalidos, cards = cls._parsear_detalhado(html)
                         if jobs:
-                            relevantes, descartadas = cls._aplicar_filtro_relevancia(jobs)
                             return ScrapeResult(
                                 source=cls.SOURCE,
                                 status=ScrapeStatus.PARTIAL,
-                                jobs=relevantes,
+                                jobs=jobs,
                                 pages_processed=paginas_processadas,
                                 error="Timeout aguardando o seletor; cards apareceram no HTML.",
-                                discarded=len(descartadas),
+                                discarded=0,
                             )
                         if cards == 0 and cls._pagina_sem_resultados(html):
                             return ScrapeResult(
@@ -148,30 +147,27 @@ class VagasScraper(BaseScraper):
                         )
                         return cls._resultado_falha(detalhe, paginas_processadas)
 
-                    relevantes, descartadas = cls._aplicar_filtro_relevancia(jobs)
-
                     if invalidos:
                         status = ScrapeStatus.PARTIAL
-                    elif relevantes:
+                    elif jobs:
                         status = ScrapeStatus.SUCCESS
                     else:
-                        status = ScrapeStatus.EMPTY  # só havia vagas fora do tema
+                        status = ScrapeStatus.EMPTY
                     erro = (
                         f"{invalidos} card(s) ignorado(s) por dados incompletos."
                         if invalidos
                         else None
                     )
                     cls._log(
-                        f"Resultado: {status.value}; {len(relevantes)} vaga(s); "
-                        f"{len(descartadas)} descartada(s) fora do tema"
+                        f"Resultado: {status.value}; {len(jobs)} vaga(s) (filtro de relevância será aplicado centralmente)"
                     )
                     return ScrapeResult(
                         source=cls.SOURCE,
                         status=status,
-                        jobs=relevantes,
+                        jobs=jobs,
                         pages_processed=paginas_processadas,
                         error=erro,
-                        discarded=len(descartadas),
+                        discarded=0,
                     )
                 finally:
                     browser.close()
@@ -214,6 +210,22 @@ class VagasScraper(BaseScraper):
             ruido.decompose()
         texto = normalizar_espacos(elemento.get_text(" ", strip=True))
         return valor_ou_none(texto.split("A empresa aceita")[0])
+
+    @classmethod
+    def _extrair_modalidade(cls, card) -> Optional[str]:
+        """Infere modalidade a partir do texto do local (ex: '100% Home Office')."""
+        elemento = card.select_one(VAGAS_LOCATION)
+        if elemento is None:
+            return None
+        texto = normalizar_espacos(elemento.get_text(" ", strip=True))
+        texto_lower = texto.lower()
+        if "home office" in texto_lower or "remoto" in texto_lower:
+            return "Remoto"
+        if "híbrido" in texto_lower or "hibrido" in texto_lower:
+            return "Híbrido"
+        if "presencial" in texto_lower:
+            return "Presencial"
+        return None
 
     @classmethod
     def _parsear_detalhado(
@@ -283,6 +295,7 @@ class VagasScraper(BaseScraper):
                         else None
                     ),
                     qtd_posicoes=int(qtd_texto.group()) if qtd_texto else None,
+                    modalidade=cls._extrair_modalidade(card),
                 )
             )
 

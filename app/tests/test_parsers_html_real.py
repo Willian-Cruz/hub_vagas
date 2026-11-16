@@ -139,9 +139,9 @@ class TestVagasComHtmlReal:
         assert "Engenheiro Civil Pl - V027803" in titulos_fora
 
 
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════
 # INFOJOBS — parser
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════
 
 class TestInfoJobsHtmlReal:
 
@@ -199,6 +199,7 @@ class TestInfoJobsHtmlReal:
 
     def test_modalidade_e_escolaridade(self, infojobs):
         jobs, _, _ = infojobs
+        # Fixture infojobs_cards.html só tem modalidade Presencial
         assert {j.modalidade for j in jobs} == {"Presencial"}
         assert all(j.escolaridade for j in jobs)
 
@@ -224,9 +225,9 @@ class TestInfoJobsHtmlReal:
         assert len(descartadas) == 8
 
 
-# ═══════════════════════════════════════════════════════════════
-# COLETA — filtro de relevância integrado aos scrapers
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════
+# COLETA — scrapers retornam todas as vagas (filtro de relevância é centralizado no CollectorService)
+# ════════════════════════════════════════════════════════════════
 
 def _resposta(html: str):
     resposta = Mock()
@@ -246,9 +247,12 @@ def _card_infojobs(titulo: str, href: str) -> str:
     )
 
 
-class TestInfoJobsColetaComFiltro:
+class TestInfoJobsColetaSemFiltro:
+    """Testes de coleta do InfoJobs: o scraper retorna TODAS as vagas.
+    O filtro de relevância é aplicado centralmente no CollectorService.
+    """
 
-    def test_pagina_real_devolve_so_a_vaga_de_dados_e_conta_descartadas(
+    def test_pagina_real_devolve_todas_as_vagas_sem_descartar(
         self, monkeypatch, infojobs_html
     ):
         monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
@@ -259,8 +263,8 @@ class TestInfoJobsColetaComFiltro:
             resultado = InfoJobsScraper.coletar()
 
         assert resultado.status is ScrapeStatus.SUCCESS
-        assert len(resultado.jobs) == 1
-        assert resultado.discarded == 8
+        assert len(resultado.jobs) == 9  # Todas as 9 vagas da fixture
+        assert resultado.discarded == 0  # Filtro centralizado no CollectorService
         assert resultado.error is None
 
     def test_pagina_so_com_vagas_fora_do_tema_nao_encerra_a_paginacao(self, monkeypatch):
@@ -275,11 +279,11 @@ class TestInfoJobsColetaComFiltro:
             resultado = InfoJobsScraper.coletar()
 
         assert resultado.status is ScrapeStatus.SUCCESS
-        assert [j.titulo for j in resultado.jobs] == ["Engenheiro de Dados"]
-        assert resultado.discarded == 1
+        assert len(resultado.jobs) == 2  # Ambas as vagas (filtro é posterior)
+        assert resultado.discarded == 0
         assert get.call_count == 3  # 3ª página repete o link da 2ª e encerra
 
-    def test_so_vagas_fora_do_tema_e_coleta_vazia_sem_erro(self, monkeypatch):
+    def test_so_vagas_fora_do_tema_retorna_status_success_com_vagas(self, monkeypatch):
         monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
         pagina = _card_infojobs("Executivo de Vendas", "/vaga-x__1.aspx")
         with patch(
@@ -287,9 +291,9 @@ class TestInfoJobsColetaComFiltro:
         ):
             resultado = InfoJobsScraper.coletar()
 
-        assert resultado.status is ScrapeStatus.EMPTY
-        assert resultado.jobs == []
-        assert resultado.discarded == 1
+        assert resultado.status is ScrapeStatus.SUCCESS  # Há vagas, só não são do tema
+        assert len(resultado.jobs) == 1
+        assert resultado.discarded == 0
         assert resultado.error is None
 
 
@@ -309,9 +313,12 @@ def _mock_vagas_browser(html):
     return contexto
 
 
-class TestVagasColetaComFiltro:
+class TestVagasColetaSemFiltro:
+    """Testes de coleta do Vagas.com: o scraper retorna TODAS as vagas.
+    O filtro de relevância é aplicado centralmente no CollectorService.
+    """
 
-    def test_pagina_real_devolve_so_vagas_de_dados_e_conta_descartadas(
+    def test_pagina_real_devolve_todas_as_vagas_sem_descartar(
         self, monkeypatch, vagas_html
     ):
         monkeypatch.setattr(VagasScraper, "MAX_PAGES", 1)
@@ -322,11 +329,11 @@ class TestVagasColetaComFiltro:
             resultado = VagasScraper.coletar()
 
         assert resultado.status is ScrapeStatus.SUCCESS
-        assert len(resultado.jobs) == 6
-        assert resultado.discarded == 22
+        assert len(resultado.jobs) == 28  # Todas as 28 vagas da fixture
+        assert resultado.discarded == 0  # Filtro centralizado no CollectorService
         assert resultado.error is None
 
-    def test_so_vagas_fora_do_tema_e_coleta_vazia_sem_erro(self, monkeypatch):
+    def test_so_vagas_fora_do_tema_retorna_status_success_com_vagas(self, monkeypatch):
         monkeypatch.setattr(VagasScraper, "MAX_PAGES", 1)
         html = (
             '<ul><li class="vaga">'
@@ -340,7 +347,7 @@ class TestVagasColetaComFiltro:
         ):
             resultado = VagasScraper.coletar()
 
-        assert resultado.status is ScrapeStatus.EMPTY
-        assert resultado.jobs == []
-        assert resultado.discarded == 1
+        assert resultado.status is ScrapeStatus.SUCCESS  # Há vagas, só não são do tema
+        assert len(resultado.jobs) == 1
+        assert resultado.discarded == 0
         assert resultado.error is None

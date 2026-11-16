@@ -5,7 +5,6 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 from bs4 import BeautifulSoup
 from schemas.job_schema import JobSchema
 from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
-from services.relevance_service import RelevanceService
 from services.seniority_service import classificar_senioridade
 
 
@@ -101,10 +100,6 @@ class GupyScraper(BaseScraper):
             erros.append(str(erro))
 
         vagas = list(vagas_por_link.values())
-
-        # Aplicar filtro de relevância: só mantém vagas cujo título contenha
-        # um termo de dados (igual o RelevanceService faz em Vagas.com/InfoJobs)
-        vagas = [v for v in vagas if RelevanceService.eh_relevante(v.titulo)]
 
         if erros:
             status = ScrapeStatus.PARTIAL if vagas else ScrapeStatus.FAILED
@@ -204,8 +199,9 @@ class GupyScraper(BaseScraper):
                 continue
 
             textos      = [t.get_text(" ", strip=True) for t in card.find_all(["p", "span"])]
-            localizacao = next((t for t in textos if cls._parece_local(t)), "Não informado")
-            descricao   = " ".join(t for t in textos if t) or "Não informado"
+            localizacao = next((t for t in textos if cls._parece_local(t)), None)
+            descricao   = " ".join(t for t in textos if t) or None
+            modalidade  = cls._extrair_modalidade(textos)
 
             vagas.append(JobSchema(
                 titulo      = titulo,
@@ -216,6 +212,7 @@ class GupyScraper(BaseScraper):
                 link        = link,
                 origem      = "Gupy",
                 raw_payload = {"html_fragment": str(card)},
+                modalidade  = modalidade,
             ))
 
         return vagas
@@ -239,18 +236,21 @@ class GupyScraper(BaseScraper):
                 pai    = link_el.find_parent()
                 titulo = pai.get_text(" ", strip=True)[:120] if pai else ""
 
-            titulo = titulo or "Não informado"
+            titulo = titulo or None
             elemento_bruto = link_el.find_parent() or link_el
+            textos_brutos = [elemento_bruto.get_text(" ", strip=True)] if elemento_bruto else []
+            modalidade = cls._extrair_modalidade(textos_brutos)
 
             vagas.append(JobSchema(
                 titulo      = titulo,
                 empresa     = cls._empresa_da_url(link),
-                senioridade = cls._extrair_senioridade(titulo, "Não informado"),
-                localizacao = "Não informado",
-                descricao   = "Não informado",
+                senioridade = cls._extrair_senioridade(titulo, None),
+                localizacao = None,
+                descricao   = None,
                 link        = link,
                 origem      = "Gupy",
                 raw_payload = {"html_fragment": str(elemento_bruto)},
+                modalidade  = modalidade,
             ))
 
         return vagas
@@ -258,12 +258,25 @@ class GupyScraper(BaseScraper):
     # ── Helpers ──────────────────────────────────────────────────────────
 
     @staticmethod
-    def _empresa_da_url(link: str) -> str:
+    def _empresa_da_url(link: str) -> str | None:
         """Extrai o nome da empresa do subdomínio (ex: mobi7.gupy.io → Mobi7)."""
 
         host       = urlparse(link).hostname or ""
         subdominio = host.split(".gupy.io")[0]
-        return subdominio.replace("-", " ").title() if subdominio else "Não informado"
+        return subdominio.replace("-", " ").title() if subdominio else None
+
+    @classmethod
+    def _extrair_modalidade(cls, textos: list[str]) -> str | None:
+        """Infere modalidade a partir dos textos do card."""
+        for texto in textos:
+            texto_lower = texto.lower()
+            if "home office" in texto_lower or "remoto" in texto_lower:
+                return "Remoto"
+            if "híbrido" in texto_lower or "hibrido" in texto_lower:
+                return "Híbrido"
+            if "presencial" in texto_lower:
+                return "Presencial"
+        return None
 
     @classmethod
     def _extrair_senioridade(cls, titulo: str, descricao: str | None = None) -> str | None:

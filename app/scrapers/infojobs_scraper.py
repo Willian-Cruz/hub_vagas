@@ -112,12 +112,9 @@ class InfoJobsScraper(BaseScraper):
                 break
 
             links_vistos.update(vaga.link for vaga in vagas_novas)
-            relevantes, descartadas = cls._aplicar_filtro_relevancia(vagas_novas)
-            descartadas_total += len(descartadas)
-            todas_vagas.extend(relevantes)
+            todas_vagas.extend(vagas_novas)
             cls._log(
-                f"Página {page_num}: {len(relevantes)} vaga(s) do tema e "
-                f"{len(descartadas)} descartada(s) de {len(vagas_pagina)} card(s)"
+                f"Página {page_num}: {len(vagas_novas)} vaga(s) de {len(vagas_pagina)} card(s) (filtro de relevância será aplicado centralmente)"
             )
 
             if page_num < cls.MAX_PAGES:
@@ -134,8 +131,7 @@ class InfoJobsScraper(BaseScraper):
             status = ScrapeStatus.EMPTY
 
         cls._log(
-            f"Resultado: {status.value}; {len(todas_vagas)} vaga(s); "
-            f"{descartadas_total} descartada(s) fora do tema; "
+            f"Resultado: {status.value}; {len(todas_vagas)} vaga(s) (filtro de relevância será aplicado centralmente); "
             f"{paginas_processadas} página(s) processada(s)"
         )
         return ScrapeResult(
@@ -144,7 +140,7 @@ class InfoJobsScraper(BaseScraper):
             jobs=todas_vagas,
             pages_processed=paginas_processadas,
             error=erro_coleta,
-            discarded=descartadas_total,
+            discarded=0,
         )
 
     @classmethod

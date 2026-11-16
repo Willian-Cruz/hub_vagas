@@ -9,7 +9,7 @@ mentions as (
         tecnologias.tecnologia
     from {{ ref('jobs') }} as jobs
     cross join tecnologias
-    where coalesce(jobs.descricao, '') ~* ('\m' || tecnologias.tecnologia || '\M')
+    where (coalesce(jobs.descricao, '') || ' ' || coalesce(jobs.titulo, '')) ~* ('\m' || tecnologias.tecnologia || '\M')
 )
 
 select

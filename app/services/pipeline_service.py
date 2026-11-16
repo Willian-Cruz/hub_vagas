@@ -46,16 +46,20 @@ class PipelineService:
         Returns:
             dict com métricas da execução:
             {
-                "run_id":        str,   # UUID da execução
-                "coletadas":     int,   # vagas do tema retornadas pelos scrapers
-                "descartadas":   int,   # vagas fora do tema, descartadas na coleta
-                "raw_salvas":    int,   # vagas inseridas na tabela raw `jobs`
-                "raw_duplicadas":int,   # vagas ignoradas por já existirem
-                "raw_erros":     int,   # vagas que falharam ao salvar
-                "bronze_ok":     bool,  # True se os ScrapeRuns foram gravados
-                "fontes":        list,  # status, contagem e erro por scraper
-                "duracao_seg":   float, # tempo total em segundos
-                "sucesso":       bool,  # False se a coleta ou persistência falhar
+                "run_id":            str,   # UUID da execução
+                "coletadas":         int,   # vagas do tema retornadas pelos scrapers
+                "descartadas":       int,   # vagas fora do tema, descartadas na coleta
+                "raw_salvas":        int,   # vagas inseridas na tabela raw `jobs`
+                "raw_duplicadas":    int,   # vagas ignoradas por já existirem
+                "raw_erros":         int,   # vagas que falharam ao salvar
+                "bronze_ok":         bool,  # True se os ScrapeRuns foram gravados
+                "fontes":            list,  # status, contagem e erro por scraper
+                "fontes_sucesso":    int,   # fontes com status SUCCESS
+                "fontes_parcial":    int,   # fontes com status PARTIAL
+                "fontes_falha":      int,   # fontes com status FAILED
+                "fontes_vazio":      int,   # fontes com status EMPTY
+                "duracao_seg":       float, # tempo total em segundos
+                "sucesso":           bool,  # True se pelo menos uma fonte trouxe vagas
             }
         """
         logger.info("=" * 60)
@@ -64,15 +68,19 @@ class PipelineService:
 
         metricas = {
             "run_id": None,
-            "coletadas":     0,
-            "descartadas":   0,
-            "raw_salvas":    0,
+            "coletadas":      0,
+            "descartadas":    0,
+            "raw_salvas":     0,
             "raw_duplicadas": 0,
-            "raw_erros":     0,
-            "bronze_ok":     False,
-            "fontes":        [],
-            "duracao_seg":   0.0,
-            "sucesso":       False,
+            "raw_erros":      0,
+            "bronze_ok":      False,
+            "fontes":         [],
+            "fontes_sucesso": 0,
+            "fontes_parcial": 0,
+            "fontes_falha":   0,
+            "fontes_vazio":   0,
+            "duracao_seg":    0.0,
+            "sucesso":        False,
         }
 
         inicio = time.time()
@@ -103,12 +111,10 @@ class PipelineService:
                 f"Descartadas (fora do tema): {metricas['descartadas']}"
             )
 
-            fontes_com_falha = [
-                resultado
-                for resultado in resultados
-                if resultado.status not in (ScrapeStatus.SUCCESS, ScrapeStatus.EMPTY)
-            ]
-            nenhuma_fonte = not resultados
+            fontes_sucesso = []
+            fontes_parcial = []
+            fontes_falha = []
+            fontes_vazio = []
             for resultado in resultados:
                 logger.info(
                     f"Fonte {resultado.source}: {resultado.status.value} | "
@@ -117,6 +123,20 @@ class PipelineService:
                 )
                 if resultado.error:
                     logger.warning(f"Fonte {resultado.source}: {resultado.error}")
+
+                if resultado.status == ScrapeStatus.SUCCESS:
+                    fontes_sucesso.append(resultado)
+                elif resultado.status == ScrapeStatus.PARTIAL:
+                    fontes_parcial.append(resultado)
+                elif resultado.status == ScrapeStatus.FAILED:
+                    fontes_falha.append(resultado)
+                elif resultado.status == ScrapeStatus.EMPTY:
+                    fontes_vazio.append(resultado)
+
+            metricas["fontes_sucesso"] = len(fontes_sucesso)
+            metricas["fontes_parcial"] = len(fontes_parcial)
+            metricas["fontes_falha"] = len(fontes_falha)
+            metricas["fontes_vazio"] = len(fontes_vazio)
 
             # ── 2. Raw layer: salvar na tabela `jobs` ────────────────────
             logger.info("Etapa 2/3: Gravando vagas na raw layer `jobs`...")
@@ -157,15 +177,22 @@ class PipelineService:
             except Exception:
                 logger.exception("Falha ao persistir status no Bronze")
 
-            metricas["sucesso"] = (
-                bronze_ok
-                and not fontes_com_falha
-                and not nenhuma_fonte
-            )
+            # Sucesso = pelo menos uma fonte trouxe vagas (SUCCESS ou PARTIAL com vagas)
+            # e a persistência no Bronze funcionou
+            fontes_com_vagas = fontes_sucesso + [f for f in fontes_parcial if f.jobs]
+            metricas["sucesso"] = bronze_ok and len(fontes_com_vagas) > 0
 
-            if fontes_com_falha or nenhuma_fonte:
+            if metricas["fontes_falha"] > 0:
                 logger.warning(
-                    "Pipeline concluído com falhas em coleta ou persistência"
+                    f"Pipeline concluído com {metricas['fontes_falha']} fonte(s) em falha"
+                )
+            if metricas["fontes_parcial"] > 0:
+                logger.info(
+                    f"Pipeline concluído com {metricas['fontes_parcial']} fonte(s) parcial(is)"
+                )
+            if not metricas["sucesso"]:
+                logger.warning(
+                    "Pipeline não coletou vagas de nenhuma fonte"
                 )
 
         except Exception as e:
@@ -180,7 +207,8 @@ class PipelineService:
                 f"Coletadas: {metricas['coletadas']} | "
                 f"Descartadas: {metricas['descartadas']} | "
                 f"Raw: {metricas['raw_salvas']} salvas / "
-                f"{metricas['raw_duplicadas']} dup / {metricas['raw_erros']} err"
+                f"{metricas['raw_duplicadas']} dup / {metricas['raw_erros']} err | "
+                f"Fontes: {metricas['fontes_sucesso']} ok, {metricas['fontes_parcial']} parcial, {metricas['fontes_falha']} falha, {metricas['fontes_vazio']} vazio"
             )
             logger.info("=" * 60)
 

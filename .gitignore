@@ -1,119 +1,50 @@
-# =========================
-# Ambiente Virtual
-# =========================
-venv/
-.venv/
-env/
+# Kilo working directory
+.kilo/
 
-# =========================
-# Variáveis de Ambiente
-# =========================
-.env
-.env.*
-.kilo
-
-# Permite versionar o exemplo
-!.env.example
-
-# =========================
-# Python
-# =========================
+# Python cache
 __pycache__/
 *.py[cod]
-*$py.class
 
-# =========================
-# Distribuição / Build
-# =========================
-build/
-dist/
-*.egg-info/
-.eggs/
+# dbt build artifacts
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
 
-# =========================
-# Logs
-# =========================
-logs/
-*.log
+# Virtual environments
+.venv/
+venv/
 
-# =========================
-# Banco Local (caso use SQLite)
-# =========================
-*.db
-*.sqlite3
-
-# =========================
-# Jupyter Notebook
-# =========================
-.ipynb_checkpoints/
-
-# =========================
-# VS Code
-# =========================
+# IDEs
 .vscode/
-
-# =========================
-# PyCharm
-# =========================
 .idea/
 
-# =========================
-# Sistema Operacional
-# =========================
+# OS files
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# =========================
-# Arquivos temporários
-# =========================
+# Logs and temp
+*.log
 *.tmp
-*.temp
+*.bak
+*.swp
 
-# =========================
-# Coverage e Testes
-# =========================
+# Test artifacts
+.pytest_cache/
 .coverage
 htmlcov/
-.pytest_cache/
+test-results/
+playwright-report/
 
-# =========================
-# Arquivos de saída
-# =========================
+# Local data
 data/raw/
 data/exports/
 
-# dbt
-dbt/target/
-dbt/dbt_packages/
-dbt/logs/
-dbt/profiles.yml
-dbt/.user.yml
-
-# =========================
-# Playwright
-# =========================
-playwright-report/
-test-results/
-
-# =========================
-# Arquivos locais do projeto
-# =========================
-*.bak
-*.swp
-.kilo/
-# =========================
-# Render
-# =========================
-# Não há arquivos sensíveis locais para o Render.
-# As credenciais são configuradas diretamente no painel do Render
-# ou via render.yaml (sem valores sensíveis — apenas referências).
-# =========================
-# Arquivos de diagnóstico e patches
-# =========================
-# Gerados por app/debug_vagas.py
+# Debug
 debug_*.html
 debug_*.png
 *.patch
-# Documentos
-docs/
+
+# dbt profiles (gerado dinamicamente)
+dbt/profiles.yml
+dbt/.user.yml

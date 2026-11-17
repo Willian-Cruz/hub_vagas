@@ -27,7 +27,7 @@ sources:
             tests:
               - not_null
               - accepted_values:
-                  values: ["Vagas.com", "InfoJobs", "Gupy"]
+                  values: ["Vagas.com", "InfoJobs", "Gupy", "Catho"]
           - name: data_coleta
             tests: [not_null]
           - name: id_externo
@@ -55,6 +55,6 @@ sources:
             tests:
               - not_null
               - accepted_values:
-                  values: ["Vagas.com", "InfoJobs", "Gupy"]
+                  values: ["Vagas.com", "InfoJobs", "Gupy", "Catho"]
           - name: status
             tests: [not_null]

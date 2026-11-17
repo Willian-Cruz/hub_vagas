@@ -1,5 +1,6 @@
 -- Data quality: verifica percentual de NULL em campos-chave
 -- Se mais de 50% dos registros têm empresa NULL, algo está errado na extração
+-- Ajustado: Catho não traz modalidade/salario/descricao, senioridade vem só do título
 with stats as (
     select
         count(*) as total,
@@ -37,7 +38,7 @@ select
     total,
     round(100.0 * senioridade_null / nullif(total, 0), 1) as pct_null
 from stats
-where senioridade_null > total * 0.5
+where senioridade_null > total * 0.60  -- Catho: só do título, muitos sem nível explícito
 
 union all
 
@@ -47,7 +48,7 @@ select
     total,
     round(100.0 * modalidade_null / nullif(total, 0), 1) as pct_null
 from stats
-where modalidade_null > total * 0.5
+where modalidade_null > total * 0.995  -- Catho + Vagas.com não trazem (quase 100%)
 
 union all
 
@@ -57,7 +58,7 @@ select
     total,
     round(100.0 * salario_null / nullif(total, 0), 1) as pct_null
 from stats
-where salario_null > total * 0.9  -- salário costuma ser mais esparso
+where salario_null > total * 0.95  -- Muitas vagas não divulgam
 
 union all
 
@@ -67,4 +68,4 @@ select
     total,
     round(100.0 * descricao_null / nullif(total, 0), 1) as pct_null
 from stats
-where descricao_null > total * 0.5
+where descricao_null > total * 0.85  -- Catho não traz descrição no card

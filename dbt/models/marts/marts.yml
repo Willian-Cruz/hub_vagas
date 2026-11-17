@@ -15,7 +15,7 @@ models:
     columns:
       - name: data_coleta
         tests: [not_null]
-      - name: origem
+      - name: source
         tests: [not_null]
   - name: mart_vagas_por_origem_localidade
     description: "Snapshot Silver de vagas por portal, localidade e senioridade."

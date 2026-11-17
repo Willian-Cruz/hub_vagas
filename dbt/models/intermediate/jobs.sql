@@ -6,6 +6,8 @@ with source_rows as (
     select * from {{ ref('stg_infojobs_jobs') }}
     union all
     select * from {{ ref('stg_gupy_jobs') }}
+    union all
+    select * from {{ ref('stg_catho_jobs') }}
 ),
 
 cleaned as (

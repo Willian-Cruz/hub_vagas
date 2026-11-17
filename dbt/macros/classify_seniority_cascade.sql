@@ -39,10 +39,10 @@ case
             {% set faixas = [(0, 3, 'Júnior'), (3, 5, 'Pleno'), (5, None, 'Sênior')] %}
             {% for min_anos, max_anos, nivel in faixas %}
                 {% if max_anos is none %}
-                    when cast(regexp_replace(experencia, '[^0-9]', '') as integer) >= {{ min_anos }} then '{{ nivel }}'
+                    when cast(regexp_replace(experiencia, '[^0-9]', '') as integer) >= {{ min_anos }} then '{{ nivel }}'
                 {% else %}
-                    when cast(regexp_replace(experencia, '[^0-9]', '') as integer) >= {{ min_anos }}
-                         and cast(regexp_replace(experencia, '[^0-9]', '') as integer) < {{ max_anos }} then '{{ nivel }}'
+                    when cast(regexp_replace(experiencia, '[^0-9]', '') as integer) >= {{ min_anos }}
+                         and cast(regexp_replace(experiencia, '[^0-9]', '') as integer) < {{ max_anos }} then '{{ nivel }}'
                 {% endif %}
             {% endfor %}
         end

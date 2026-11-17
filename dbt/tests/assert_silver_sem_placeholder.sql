@@ -1,4 +1,13 @@
--- Contrato de NULL: campo sem informação nunca vira o texto "Não informado"
+{{
+  config(
+    severity = 'error',
+    meta = {
+      'documentacao': 'Invariante de contrato NULL: campo sem informacao nunca vira o texto '
+                      '"Nao informado"/"Confidencial" na Silver.'
+    }
+  )
+}}
+-- Contrato de NULL: campo sem informacao nunca vira o texto "Não informado"
 select raw_job_id, origem
 from {{ ref('jobs') }}
 where lower(coalesce(empresa, '')) in ('não informado', 'nao informado', 'confidencial')

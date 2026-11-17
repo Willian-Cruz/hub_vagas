@@ -1,6 +1,9 @@
 import re
 from typing import Optional
 
+from scrapers.parser_utils import parse_salario
+from utils.text_utils import valor_ou_none
+
 
 class SalaryService:
     """
@@ -75,6 +78,55 @@ class SalaryService:
             return cls._converter_k(match_k.group(0))
 
         return None
+
+    # ── Estruturação de salário (P4) ──────────────────────────────────
+
+    @classmethod
+    def estruturar(cls, texto: Optional[str]) -> dict:
+        """
+        Decompõe o texto de salário em campos estruturados.
+
+        Retorna:
+            {
+                "salario_texto": str | None,   # texto formatado (ex.: "R$ 5.000 - R$ 8.000")
+                "salario_min": float | None,   # valor mínimo em reais
+                "salario_max": float | None,   # valor máximo em reais
+                "salario_tipo": str,           # faixa | exato | a_combinar | nao_informado
+            }
+
+        `salario_tipo` é ``a_combinar`` apenas quando o portal informa
+        explicitamente ("a combinar", confidencial, etc.); ``nao_informado``
+        quando não há texto de salário.
+        """
+        resultado = {
+            "salario_texto": None,
+            "salario_min": None,
+            "salario_max": None,
+            "salario_tipo": "nao_informado",
+        }
+
+        texto_limpo = valor_ou_none(texto)
+        if texto_limpo is None:
+            return resultado
+
+        if cls._NAO_DIVULGADO.search(texto_limpo):
+            resultado["salario_texto"] = "A combinar"
+            resultado["salario_tipo"] = "a_combinar"
+            return resultado
+
+        estruturado = parse_salario(texto_limpo)
+        tipo = estruturado["tipo"]
+        if tipo in ("faixa", "a_partir", "ate"):
+            resultado["salario_tipo"] = "faixa"
+        elif tipo == "fixo":
+            resultado["salario_tipo"] = "exato"
+        elif tipo == "a_combinar":
+            resultado["salario_tipo"] = "a_combinar"
+
+        resultado["salario_texto"] = cls.extrair(texto_limpo)
+        resultado["salario_min"] = estruturado["min"]
+        resultado["salario_max"] = estruturado["max"]
+        return resultado
 
     # ── Helpers ────────────────────────────────────────────────
 

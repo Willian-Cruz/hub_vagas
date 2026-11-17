@@ -18,7 +18,7 @@ def _vaga():
 
 def _mock_persistence(monkeypatch):
     """Mocka JobRepository.salvar e BronzeRepository.persistir_resultados."""
-    monkeypatch.setattr(JobRepository, "salvar", lambda vaga: SALVA)
+    monkeypatch.setattr(JobRepository, "salvar", lambda vaga, run_id=None: SALVA)
     monkeypatch.setattr(
         BronzeRepository, "persistir_resultados",
         lambda resultados, run_id, started_at, finished_at=None: len(

@@ -12,6 +12,18 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+vars:
+  # Limiares de percentual de NULL na Silver (assert_silver_null_pct.sql).
+  # Valores "significativos": apertados o suficiente para flagar regressões,
+  # mas folgados para aceitar portais que não trazem certo campo (ex.: Catho
+  # não traz descricao/modalidade/salario no card).
+  null_pct_empresa: 0.50
+  null_pct_localizacao: 0.50
+  null_pct_senioridade: 0.30
+  null_pct_modalidade: 0.50
+  null_pct_salario: 0.40
+  null_pct_descricao: 0.30
+
 models:
   hub_vagas:
     staging:

@@ -27,7 +27,8 @@ cleaned as (
         {{ null_if_placeholder('escolaridade') }} as escolaridade,
         data_publicacao,
         qtd_posicoes,
-        data_coleta
+        data_coleta,
+        is_relevant
     from source_rows
 ),
 
@@ -56,7 +57,15 @@ normalized as (
         escolaridade,
         data_publicacao,
         qtd_posicoes,
-        data_coleta
+        data_coleta,
+        is_relevant,
+        -- Descrição truncada: termina em "..." ou é curta demais para ser confiável
+        case
+            when descricao is not null
+                 and (descricao like '%...' or length(descricao) <= 160)
+            then true
+            else false
+        end as descricao_truncada
     from cleaned
     -- Sem título e sem link a vaga não é utilizável
     where titulo is not null
@@ -70,9 +79,12 @@ keyed as (
             {{ normalize_modality('modalidade_raw') }},
             case when localizacao in ('Remoto', 'Híbrido') then localizacao end
         ) as modalidade,
+        case
+            when {{ normalize_modality('modalidade_raw') }} is not null then 'portal'
+            when localizacao in ('Remoto', 'Híbrido') then 'local'
+            else null
+        end as modalidade_origem,
         -- Mesma vaga republicada com outro ID: título + empresa + local.
-        -- Permite dedup por conteúdo mesmo quando empresa OU localização estiver faltando,
-        -- usando placeholder consistente para campos ausentes para evitar falsos positivos.
         case
             when empresa is not null or localizacao is not null
                 then origem
@@ -82,6 +94,17 @@ keyed as (
         end as chave_conteudo,
         coalesce(id_externo, link) as chave_portal
     from normalized
+),
+
+-- Primeira e última observação de cada grupo de dedup (conteúdo, ou o próprio
+-- job do portal quando não há chave de conteúdo).
+seen as (
+    select
+        coalesce(chave_conteudo, origem || '|' || chave_portal) as dedup_key,
+        min(data_coleta) as first_seen_at,
+        max(data_coleta) as last_seen_at
+    from keyed
+    group by 1
 ),
 
 latest_per_portal_id as (
@@ -112,22 +135,29 @@ ranked as (
 )
 
 select
-    raw_job_id,
-    origem,
-    link,
-    id_externo,
-    titulo,
-    empresa,
-    senioridade,
-    localizacao,
-    descricao,
-    salario,
-    modalidade,
-    experiencia,
-    escolaridade,
-    qtd_posicoes,
-    data_publicacao,
-    chave_conteudo,
-    data_coleta
-from ranked
-where content_rank = 1
+    r.raw_job_id,
+    r.origem,
+    r.link,
+    r.id_externo,
+    r.titulo,
+    r.empresa,
+    r.senioridade,
+    r.localizacao,
+    r.descricao,
+    r.salario,
+    r.modalidade,
+    r.experiencia,
+    r.escolaridade,
+    r.qtd_posicoes,
+    r.data_publicacao,
+    r.chave_conteudo,
+    r.data_coleta,
+    s.first_seen_at,
+    s.last_seen_at,
+    r.is_relevant,
+    r.descricao_truncada,
+    r.modalidade_origem
+from ranked r
+left join seen s
+    on s.dedup_key = coalesce(r.chave_conteudo, r.origem || '|' || r.chave_portal)
+where r.content_rank = 1

@@ -1,3 +1,13 @@
+{{
+  config(
+    severity = 'error',
+    meta = {
+      'documentacao': 'Invariante de valores validos: campos categoricos da Silver '
+                      '(senioridade, modalidade, localizacao, empresa) so podem '
+                      'conter valores permitidos ou NULL.'
+    }
+  )
+}}
 -- Data quality: valida valores permitidos em campos categóricos
 with invalidos as (
     select

@@ -54,3 +54,31 @@ class TestExtrairSalario:
             "Benefícios: VR, VT, plano de saúde."
         )
         assert SalaryService.extrair(texto) is None
+
+
+class TestEstruturarSalario:
+
+    def test_faixa(self):
+        r = SalaryService.estruturar("R$ 5.000,00 a R$ 8.000,00")
+        assert r["salario_tipo"] == "faixa"
+        assert r["salario_min"] == 5000.0
+        assert r["salario_max"] == 8000.0
+        assert "R$" in r["salario_texto"]
+
+    def test_exato(self):
+        r = SalaryService.estruturar("R$ 6.500")
+        assert r["salario_tipo"] == "exato"
+        assert r["salario_min"] == 6500.0
+        assert r["salario_max"] == 6500.0
+
+    def test_a_combinar(self):
+        r = SalaryService.estruturar("Salário a combinar")
+        assert r["salario_tipo"] == "a_combinar"
+        assert r["salario_texto"] == "A combinar"
+
+    def test_nao_informado(self):
+        r = SalaryService.estruturar(None)
+        assert r["salario_tipo"] == "nao_informado"
+        assert r["salario_texto"] is None
+        r = SalaryService.estruturar("Vaga para analista de dados")
+        assert r["salario_tipo"] == "nao_informado"

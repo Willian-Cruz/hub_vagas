@@ -15,8 +15,10 @@ models:
         tests: [not_null]
       - name: titulo
         tests: [not_null]
+      - name: is_relevant
+        tests: [not_null]
   - name: stg_infojobs_jobs
-    description: "Campos extraídos da raw jobs do InfoJobs."
+    description: "Campos extraídos da raw job_observations do InfoJobs."
     columns:
       - name: raw_job_id
         tests: [not_null, unique]
@@ -29,8 +31,10 @@ models:
         tests: [not_null]
       - name: titulo
         tests: [not_null]
+      - name: is_relevant
+        tests: [not_null]
   - name: stg_gupy_jobs
-    description: "Campos extraídos da raw jobs da Gupy."
+    description: "Campos extraídos da raw job_observations da Gupy."
     columns:
       - name: raw_job_id
         tests: [not_null, unique]
@@ -43,8 +47,10 @@ models:
         tests: [not_null]
       - name: titulo
         tests: [not_null]
+      - name: is_relevant
+        tests: [not_null]
   - name: stg_catho_jobs
-    description: "Campos extraídos da raw jobs da Catho."
+    description: "Campos extraídos da raw job_observations da Catho."
     columns:
       - name: raw_job_id
         tests: [not_null, unique]
@@ -56,4 +62,6 @@ models:
       - name: link
         tests: [not_null]
       - name: titulo
+        tests: [not_null]
+      - name: is_relevant
         tests: [not_null]

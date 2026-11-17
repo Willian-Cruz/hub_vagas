@@ -256,11 +256,17 @@ class TestInfoJobsColetaSemFiltro:
         self, monkeypatch, infojobs_html
     ):
         monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
-        with patch(
-            "scrapers.infojobs_scraper.requests.get",
-            return_value=_resposta(infojobs_html.decode("utf-8")),
-        ):
-            resultado = InfoJobsScraper.coletar()
+        monkeypatch.setattr(
+            InfoJobsScraper, "_buscar_pagina",
+            lambda pagina: infojobs_html
+        )
+        monkeypatch.setattr(
+            InfoJobsScraper, "_parsear_cards",
+            lambda conteudo: InfoJobsScraper._parsear_detalhado(conteudo)
+        )
+        monkeypatch.setattr("time.sleep", lambda *_: None)
+
+        resultado = InfoJobsScraper.coletar()
 
         assert resultado.status is ScrapeStatus.SUCCESS
         assert len(resultado.jobs) == 9  # Todas as 9 vagas da fixture
@@ -269,27 +275,40 @@ class TestInfoJobsColetaSemFiltro:
 
     def test_pagina_so_com_vagas_fora_do_tema_nao_encerra_a_paginacao(self, monkeypatch):
         monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 5)
-        monkeypatch.setattr("scrapers.infojobs_scraper.time.sleep", lambda *_: None)
+        monkeypatch.setattr("time.sleep", lambda *_: None)
         pagina_1 = _card_infojobs("Executivo de Vendas", "/vaga-x__1.aspx")
         pagina_2 = _card_infojobs("Engenheiro de Dados", "/vaga-y__2.aspx")
-        with patch(
-            "scrapers.infojobs_scraper.requests.get",
-            side_effect=[_resposta(pagina_1), _resposta(pagina_2), _resposta(pagina_2)],
-        ) as get:
-            resultado = InfoJobsScraper.coletar()
+        monkeypatch.setattr(
+            InfoJobsScraper, "_buscar_pagina",
+            lambda pagina: [pagina_1, pagina_2, pagina_2][pagina - 1].encode("utf-8")
+        )
+        monkeypatch.setattr(
+            InfoJobsScraper, "_parsear_cards",
+            lambda conteudo: InfoJobsScraper._parsear_detalhado(conteudo)
+        )
+
+        resultado = InfoJobsScraper.coletar()
 
         assert resultado.status is ScrapeStatus.SUCCESS
         assert len(resultado.jobs) == 2  # Ambas as vagas (filtro é posterior)
         assert resultado.discarded == 0
-        assert get.call_count == 3  # 3ª página repete o link da 2ª e encerra
+        assert resultado.pages_processed == 3  # 3ª página repete o link da 2ª e encerra
 
     def test_so_vagas_fora_do_tema_retorna_status_success_com_vagas(self, monkeypatch):
         monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
         pagina = _card_infojobs("Executivo de Vendas", "/vaga-x__1.aspx")
-        with patch(
-            "scrapers.infojobs_scraper.requests.get", return_value=_resposta(pagina)
-        ):
-            resultado = InfoJobsScraper.coletar()
+        html_para_todas_as_paginas = pagina.encode("utf-8")
+        monkeypatch.setattr(
+            InfoJobsScraper, "_buscar_pagina",
+            lambda _pagina: html_para_todas_as_paginas
+        )
+        monkeypatch.setattr(
+            InfoJobsScraper, "_parsear_cards",
+            lambda conteudo: InfoJobsScraper._parsear_detalhado(conteudo)
+        )
+        monkeypatch.setattr("time.sleep", lambda *_: None)
+
+        resultado = InfoJobsScraper.coletar()
 
         assert resultado.status is ScrapeStatus.SUCCESS  # Há vagas, só não são do tema
         assert len(resultado.jobs) == 1
@@ -322,11 +341,18 @@ class TestVagasColetaSemFiltro:
         self, monkeypatch, vagas_html
     ):
         monkeypatch.setattr(VagasScraper, "MAX_PAGES", 1)
-        with patch(
-            "scrapers.vagas_scraper.sync_playwright",
-            return_value=_mock_vagas_browser(vagas_html),
-        ):
-            resultado = VagasScraper.coletar()
+        monkeypatch.setattr(VagasScraper, "_pagina_carregada", False)
+        monkeypatch.setattr(
+            VagasScraper, "_buscar_pagina",
+            lambda pagina: vagas_html if pagina == 1 else ""
+        )
+        monkeypatch.setattr(
+            VagasScraper, "_parsear_cards",
+            lambda conteudo: VagasScraper._parsear_detalhado(conteudo)
+        )
+        monkeypatch.setattr("time.sleep", lambda *_: None)
+
+        resultado = VagasScraper.coletar()
 
         assert resultado.status is ScrapeStatus.SUCCESS
         assert len(resultado.jobs) == 28  # Todas as 28 vagas da fixture
@@ -335,17 +361,24 @@ class TestVagasColetaSemFiltro:
 
     def test_so_vagas_fora_do_tema_retorna_status_success_com_vagas(self, monkeypatch):
         monkeypatch.setattr(VagasScraper, "MAX_PAGES", 1)
+        monkeypatch.setattr(VagasScraper, "_pagina_carregada", False)
         html = (
             '<ul><li class="vaga">'
             '<a class="link-detalhes-vaga" href="/vagas/v1/executivo" '
             'title="Executivo de Vendas">Executivo de Vendas</a>'
             "</li></ul>"
         )
-        with patch(
-            "scrapers.vagas_scraper.sync_playwright",
-            return_value=_mock_vagas_browser(html),
-        ):
-            resultado = VagasScraper.coletar()
+        monkeypatch.setattr(
+            VagasScraper, "_buscar_pagina",
+            lambda pagina: html if pagina == 1 else ""
+        )
+        monkeypatch.setattr(
+            VagasScraper, "_parsear_cards",
+            lambda conteudo: VagasScraper._parsear_detalhado(conteudo)
+        )
+        monkeypatch.setattr("time.sleep", lambda *_: None)
+
+        resultado = VagasScraper.coletar()
 
         assert resultado.status is ScrapeStatus.SUCCESS  # Há vagas, só não são do tema
         assert len(resultado.jobs) == 1

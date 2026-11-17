@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: int_jobs_deduped
+    description: "Silver etapa 3/3: deduplicação por grupo de conteúdo (cross-portal); is_canonical marca a linha mais recente."
+    columns:
+      - name: raw_job_id
+        tests: [not_null, unique]
+      - name: link
+        tests: [not_null]
+      - name: data_coleta
+        tests: [not_null]
+      - name: titulo
+        tests: [not_null]
+      - name: is_relevant
+        tests: [not_null]
+      - name: dedup_group_id
+        tests: [not_null]
+      - name: first_seen_at
+        tests: [not_null]
+      - name: last_seen_at
+        tests: [not_null]
+      - name: is_canonical
+        tests: [not_null]
+      - name: modalidade_origem
+      - name: data_publicacao_precisao
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["hora", "dia", "estimada"]

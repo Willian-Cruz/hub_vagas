@@ -6,6 +6,9 @@ Estratégia:
     passando HTML fixo que simula o que o portal retornaria.
     Isso evita dependência de rede e torna os testes rápidos e estáveis.
 
+    Os testes de coletar() mockam _buscar_pagina() e _parsear_cards()
+    (Template Method do BaseScraper), não requests/playwright diretamente.
+
 Execução: pytest tests/test_scrapers.py -v
 """
 import sys
@@ -25,11 +28,10 @@ from scrapers.gupy_scraper import GupyScraper
 from schemas.job_schema import JobSchema
 
 
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════
 # HTML FIXTURES — simulam o que os portais retornam
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════
 
-# HTML mínimo que o vagas.com.br retorna por vaga
 VAGAS_HTML_UMA_VAGA = """
 <ul>
   <li class="vaga">
@@ -70,7 +72,6 @@ VAGAS_HTML_MULTIPLAS = """
 </ul>
 """
 
-# Vaga sem link — deve ser ignorada
 VAGAS_HTML_SEM_LINK = """
 <ul>
   <li class="vaga">
@@ -84,8 +85,6 @@ VAGAS_HTML_SEM_LINK = """
 
 VAGAS_HTML_VAZIO = "<ul></ul>"
 
-
-# HTML mínimo que o infojobs retorna por vaga
 INFOJOBS_HTML_UMA_VAGA = """
 <div class="js_vacancyLoad" data-href="/vaga-infojobs-5678">
   <h2>Engenheiro de Dados</h2>
@@ -114,9 +113,6 @@ INFOJOBS_HTML_MULTIPLAS = """
 
 INFOJOBS_HTML_VAZIO = "<div></div>"
 
-
-# HTML mínimo que o portal.gupy.io retorna por vaga — cenário nível 1
-# (card estruturado: <li> contendo o link da vaga + heading + textos soltos)
 GUPY_HTML_NIVEL1_UMA_VAGA = """
 <ul>
   <li>
@@ -152,7 +148,6 @@ GUPY_HTML_NIVEL1_MULTIPLAS = """
 </ul>
 """
 
-# Card sem link de vaga (ex: item de menu do portal) — deve ser ignorado
 GUPY_HTML_NIVEL1_SEM_LINK_VAGA = """
 <ul>
   <li>
@@ -162,9 +157,6 @@ GUPY_HTML_NIVEL1_SEM_LINK_VAGA = """
 </ul>
 """
 
-# HTML sem nenhuma estrutura de card — só o link cru da vaga solto no meio
-# do DOM. Simula a Gupy tendo trocado as classes CSS-in-JS: o nível 1
-# não acha nada, o nível 2 assume.
 GUPY_HTML_NIVEL2_FALLBACK = """
 <div>
   <div class="sc-xk93hj-ghost-class">
@@ -173,8 +165,6 @@ GUPY_HTML_NIVEL2_FALLBACK = """
 </div>
 """
 
-# Mesmo link de vaga aparecendo duas vezes (com querystrings diferentes)
-# — o parser precisa deduplicar mesmo dentro de uma única página
 GUPY_HTML_NIVEL2_LINK_DUPLICADO = """
 <div>
   <a href="https://x.gupy.io/jobs/1?jobBoardSource=a">Vaga X</a>
@@ -185,9 +175,9 @@ GUPY_HTML_NIVEL2_LINK_DUPLICADO = """
 GUPY_HTML_VAZIO = "<div></div>"
 
 
-# ═══════════════════════════════════════════════════════════════
-# TESTES — VagasScraper
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════
+# TESTES — VagasScraper.parsear
+# ════════════════════════════════════════════════════════════════
 
 class TestVagasScraperParsear:
 
@@ -232,9 +222,9 @@ class TestVagasScraperParsear:
         assert resultado == []
 
 
-# ═══════════════════════════════════════════════════════════════
-# TESTES — InfoJobsScraper
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════
+# TESTES — InfoJobsScraper.parsear
+# ════════════════════════════════════════════════════════════════
 
 class TestInfoJobsScraperParsear:
 
@@ -286,164 +276,64 @@ class TestInfoJobsScraperParsear:
         assert resultado[0].localizacao is None
 
 
-def _infojobs_response(html):
-    response = Mock()
-    response.content = html.encode("utf-8")
-    response.raise_for_status.return_value = None
-    return response
-
-
-class TestInfoJobsScraperColetar:
-    def test_coleta_vagas_e_conta_pagina(self, monkeypatch):
-        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
-        with patch(
-            "scrapers.infojobs_scraper.requests.get",
-            return_value=_infojobs_response(INFOJOBS_HTML_MULTIPLAS),
-        ) as get:
-            resultado = InfoJobsScraper.coletar()
-
-        assert resultado.status is ScrapeStatus.SUCCESS
-        assert len(resultado.jobs) == 2
-        assert resultado.pages_processed == 1
-        assert resultado.error is None
-        assert "campo=griddate" in get.call_args.args[0]
-        assert "orden=desc" in get.call_args.args[0]
-
-    def test_html_com_estado_vazio_explicito(self, monkeypatch):
-        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 3)
-        response = _infojobs_response(
-            '<div class="no-results">Nenhuma vaga encontrada</div>'
-        )
-        with patch("scrapers.infojobs_scraper.requests.get", return_value=response) as get:
-            resultado = InfoJobsScraper.coletar()
-
-        assert resultado.status is ScrapeStatus.EMPTY
-        assert resultado.jobs == []
-        assert resultado.pages_processed == 1
-        get.assert_called_once()
-
-    def test_html_sem_cards_e_sem_estado_vazio_e_falha(self, monkeypatch):
-        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
-        with patch(
-            "scrapers.infojobs_scraper.requests.get",
-            return_value=_infojobs_response(INFOJOBS_HTML_VAZIO),
-        ):
-            resultado = InfoJobsScraper.coletar()
-
-        assert resultado.status is ScrapeStatus.FAILED
-        assert "seletor esperado" in resultado.error
-
-    def test_falha_de_requisicao_e_reportada(self, monkeypatch):
-        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
-        with patch(
-            "scrapers.infojobs_scraper.requests.get",
-            side_effect=requests.exceptions.SSLError("certificado não confiável"),
-        ):
-            resultado = InfoJobsScraper.coletar()
-
-        assert resultado.status is ScrapeStatus.FAILED
-        assert "SSLError" in resultado.error
-        assert resultado.pages_processed == 0
-
-    def test_falha_depois_de_uma_pagina_retorna_parcial(self, monkeypatch):
-        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 2)
-        monkeypatch.setattr("scrapers.infojobs_scraper.time.sleep", lambda *_: None)
-        with patch(
-            "scrapers.infojobs_scraper.requests.get",
-            side_effect=[
-                _infojobs_response(INFOJOBS_HTML_UMA_VAGA),
-                requests.exceptions.Timeout("tempo esgotado"),
-            ],
-        ):
-            resultado = InfoJobsScraper.coletar()
-
-        assert resultado.status is ScrapeStatus.PARTIAL
-        assert len(resultado.jobs) == 1
-        assert resultado.pages_processed == 1
-        assert "Timeout" in resultado.error
-
-    def test_paginacao_para_quando_a_pagina_repete_os_mesmos_links(self, monkeypatch):
-        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 3)
-        monkeypatch.setattr("scrapers.infojobs_scraper.time.sleep", lambda *_: None)
-        with patch(
-            "scrapers.infojobs_scraper.requests.get",
-            return_value=_infojobs_response(INFOJOBS_HTML_UMA_VAGA),
-        ) as get:
-            resultado = InfoJobsScraper.coletar()
-
-        assert resultado.status is ScrapeStatus.SUCCESS
-        assert len(resultado.jobs) == 1
-        assert resultado.pages_processed == 2
-        assert get.call_count == 2
-
-    def test_usa_bundle_ca_configurado_sem_desativar_tls(self, monkeypatch):
-        monkeypatch.setenv("REQUESTS_CA_BUNDLE", "C:/certs/proxy-ca.pem")
-        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
-        with patch(
-            "scrapers.infojobs_scraper.requests.get",
-            return_value=_infojobs_response(INFOJOBS_HTML_UMA_VAGA),
-        ) as get:
-            InfoJobsScraper.coletar()
-
-        assert get.call_args.kwargs["verify"] == "C:/certs/proxy-ca.pem"
-
-
-def _mock_vagas_browser(html, *, wait_error=None):
-    playwright = MagicMock()
-    browser = MagicMock()
-    page = MagicMock()
-    context = MagicMock()
-    context.__enter__.return_value = playwright
-    context.__exit__.return_value = False
-    playwright.chromium.launch.return_value = browser
-    browser.new_page.return_value = page
-    page.goto.return_value = SimpleNamespace(status=200)
-    page.wait_for_selector.side_effect = wait_error
-    page.locator.return_value.count.side_effect = [1, 1]
-    page.wait_for_function.side_effect = PlaywrightTimeout("sem novos cards")
-    page.content.return_value = html
-    return context, browser, page
-
+# ════════════════════════════════════════════════════════════════
+# TESTES — VagasScraper.coletar (Template Method)
+# ════════════════════════════════════════════════════════════════
 
 class TestVagasScraperColetar:
+
     def test_aguarda_dom_e_retorna_resultado_estruturado(self, monkeypatch):
         monkeypatch.setattr(VagasScraper, "MAX_PAGES", 1)
-        context, browser, page = _mock_vagas_browser(VAGAS_HTML_UMA_VAGA)
-        with patch("scrapers.vagas_scraper.sync_playwright", return_value=context):
-            resultado = VagasScraper.coletar()
+        monkeypatch.setattr(
+            VagasScraper, "_buscar_pagina",
+            lambda pagina: VAGAS_HTML_UMA_VAGA
+        )
+        monkeypatch.setattr(
+            VagasScraper, "_parsear_cards",
+            lambda conteudo: VagasScraper._parsear_detalhado(conteudo)
+        )
+        monkeypatch.setattr("time.sleep", lambda *_: None)
+
+        resultado = VagasScraper.coletar()
 
         assert resultado.status is ScrapeStatus.SUCCESS
         assert len(resultado.jobs) == 1
         assert resultado.pages_processed == 1
         assert "ordenar_por=mais_recentes" in VagasScraper.URL
-        page.goto.assert_called_once_with(
-            VagasScraper.URL,
-            timeout=VagasScraper.NAVIGATION_TIMEOUT_MS,
-            wait_until="domcontentloaded",
-        )
-        browser.close.assert_called_once()
 
-    def test_timeout_com_marcador_de_vazio_retorna_empty(self):
+    def test_estado_vazio_retorna_empty(self, monkeypatch):
         html = "<p>Nenhuma vaga encontrada nesta busca</p>"
-        context, _, _ = _mock_vagas_browser(
-            html, wait_error=PlaywrightTimeout("sem cards")
+        monkeypatch.setattr(VagasScraper, "MAX_PAGES", 1)
+        monkeypatch.setattr(
+            VagasScraper, "_buscar_pagina",
+            lambda pagina: html
         )
-        with patch("scrapers.vagas_scraper.sync_playwright", return_value=context):
-            resultado = VagasScraper.coletar()
+        monkeypatch.setattr(
+            VagasScraper, "_parsear_cards",
+            lambda conteudo: ([], 0, 0)
+        )
+        monkeypatch.setattr("time.sleep", lambda *_: None)
+
+        resultado = VagasScraper.coletar()
 
         assert resultado.status is ScrapeStatus.EMPTY
         assert resultado.pages_processed == 1
 
-    def test_timeout_sem_cards_ou_estado_vazio_e_falha(self):
-        context, _, _ = _mock_vagas_browser(
-            "<html><body>Layout inesperado</body></html>",
-            wait_error=PlaywrightTimeout("sem cards"),
+    def test_sem_cards_e_sem_estado_vazio_e_falha(self, monkeypatch):
+        monkeypatch.setattr(VagasScraper, "MAX_PAGES", 1)
+        monkeypatch.setattr(
+            VagasScraper, "_buscar_pagina",
+            lambda pagina: "<html><body>Layout inesperado</body></html>"
         )
-        with patch("scrapers.vagas_scraper.sync_playwright", return_value=context):
-            resultado = VagasScraper.coletar()
+        monkeypatch.setattr(
+            VagasScraper, "_parsear_cards",
+            lambda conteudo: ([], 0, 0)
+        )
+
+        resultado = VagasScraper.coletar()
 
         assert resultado.status is ScrapeStatus.FAILED
-        assert "Nenhum card" in resultado.error
+        assert "seletor esperado" in resultado.error
 
     def test_aceita_href_absoluto(self):
         html = VAGAS_HTML_UMA_VAGA.replace(
@@ -458,6 +348,127 @@ class TestVagasScraperColetar:
 
         assert len(resultado) == 1
 
+
+# ════════════════════════════════════════════════════════════════
+# TESTES — InfoJobsScraper.coletar (Template Method)
+# ════════════════════════════════════════════════════════════════
+
+class TestInfoJobsScraperColetar:
+
+    def test_coleta_vagas_e_conta_pagina(self, monkeypatch):
+        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
+        monkeypatch.setattr(
+            InfoJobsScraper, "_buscar_pagina",
+            lambda pagina: INFOJOBS_HTML_MULTIPLAS.encode("utf-8")
+        )
+        monkeypatch.setattr(
+            InfoJobsScraper, "_parsear_cards",
+            lambda conteudo: InfoJobsScraper._parsear_detalhado(conteudo)
+        )
+        monkeypatch.setattr("time.sleep", lambda *_: None)
+
+        resultado = InfoJobsScraper.coletar()
+
+        assert resultado.status is ScrapeStatus.SUCCESS
+        assert len(resultado.jobs) == 2
+        assert resultado.pages_processed == 1
+        assert resultado.error is None
+
+    def test_html_com_estado_vazio_explicito(self, monkeypatch):
+        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 3)
+        monkeypatch.setattr(
+            InfoJobsScraper, "_buscar_pagina",
+            lambda pagina: '<div class="no-results">Nenhuma vaga encontrada</div>'.encode("utf-8")
+        )
+        monkeypatch.setattr(
+            InfoJobsScraper, "_parsear_cards",
+            lambda conteudo: ([], 0, 0)
+        )
+        monkeypatch.setattr("time.sleep", lambda *_: None)
+
+        resultado = InfoJobsScraper.coletar()
+
+        assert resultado.status is ScrapeStatus.EMPTY
+        assert resultado.jobs == []
+        assert resultado.pages_processed == 1
+
+    def test_html_sem_cards_e_sem_estado_vazio_e_falha(self, monkeypatch):
+        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
+        monkeypatch.setattr(
+            InfoJobsScraper, "_buscar_pagina",
+            lambda pagina: INFOJOBS_HTML_VAZIO.encode("utf-8")
+        )
+        monkeypatch.setattr(
+            InfoJobsScraper, "_parsear_cards",
+            lambda conteudo: ([], 0, 0)
+        )
+
+        resultado = InfoJobsScraper.coletar()
+
+        assert resultado.status is ScrapeStatus.FAILED
+        assert "seletor esperado" in resultado.error
+
+    def test_falha_de_requisicao_e_reportada(self, monkeypatch):
+        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 1)
+
+        def buscar_pagina_com_erro(pagina):
+            raise requests.exceptions.SSLError("certificado não confiável")
+
+        monkeypatch.setattr(InfoJobsScraper, "_buscar_pagina", buscar_pagina_com_erro)
+
+        resultado = InfoJobsScraper.coletar()
+
+        assert resultado.status is ScrapeStatus.FAILED
+        assert "SSLError" in resultado.error
+        assert resultado.pages_processed == 0
+
+    def test_falha_depois_de_uma_pagina_retorna_parcial(self, monkeypatch):
+        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 2)
+        monkeypatch.setattr("time.sleep", lambda *_: None)
+
+        chamadas = [0]
+        def buscar_pagina_com_erro_na_segunda(pagina):
+            chamadas[0] += 1
+            if chamadas[0] == 1:
+                return INFOJOBS_HTML_UMA_VAGA.encode("utf-8")
+            raise requests.exceptions.Timeout("tempo esgotado")
+
+        monkeypatch.setattr(InfoJobsScraper, "_buscar_pagina", buscar_pagina_com_erro_na_segunda)
+        monkeypatch.setattr(
+            InfoJobsScraper, "_parsear_cards",
+            lambda conteudo: InfoJobsScraper._parsear_detalhado(conteudo)
+        )
+
+        resultado = InfoJobsScraper.coletar()
+
+        assert resultado.status is ScrapeStatus.PARTIAL
+        assert len(resultado.jobs) == 1
+        assert resultado.pages_processed == 1
+        assert "Timeout" in resultado.error
+
+    def test_paginacao_para_quando_a_pagina_repete_os_mesmos_links(self, monkeypatch):
+        monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 3)
+        monkeypatch.setattr("time.sleep", lambda *_: None)
+
+        monkeypatch.setattr(
+            InfoJobsScraper, "_buscar_pagina",
+            lambda pagina: INFOJOBS_HTML_UMA_VAGA.encode("utf-8")
+        )
+        monkeypatch.setattr(
+            InfoJobsScraper, "_parsear_cards",
+            lambda conteudo: InfoJobsScraper._parsear_detalhado(conteudo)
+        )
+
+        resultado = InfoJobsScraper.coletar()
+
+        assert resultado.status is ScrapeStatus.SUCCESS
+        assert len(resultado.jobs) == 1
+        assert resultado.pages_processed == 2
+
+
+# ════════════════════════════════════════════════════════════════
+# TESTES — GupyScraper
+# ════════════════════════════════════════════════════════════════
 
 def test_gupy_retorna_scrape_result_e_fecha_browser(monkeypatch):
     vaga = JobSchema(

@@ -203,7 +203,7 @@ Vagas Silver enriquecidas com tecnologias.
 ## Regras de dados
 
 - **Campo sem informação é `NULL`.** Os scrapers do Vagas.com e do InfoJobs já devolvem `None` para "Confidencial", "Localização não informada" e similares, e a Silver trata os mesmos textos vindos de qualquer fonte. No Power BI, trate `NULL` como "(Em branco)".
-- **Relevância.** Os portais buscam por palavras soltas, então "engenheiro de dados" também devolve engenharia civil e vendas. A vaga só passa se o título citar um termo de `RelevanceService.TERMOS_TITULO` (dados, data, analytics, BI, ETL, dbt, SQL, Python, Spark, Airflow, Databricks, Snowflake, BigQuery e outros), como palavra inteira. As descartadas não chegam ao raw; só a contagem é registrada. A Gupy busca por termos próprios e ainda não passa por esse filtro.
+- **Relevância.** Os portais buscam por palavras soltas, então "engenheiro de dados" também devolve engenharia civil e vendas. A vaga só passa se o título citar um termo de `dbt/seeds/termos_relevancia.csv` (dados, data, analytics, BI, ETL, dbt, SQL, Python, Spark, Airflow, Databricks, Snowflake, BigQuery e outros), como palavra inteira. As descartadas não chegam ao raw; só a contagem é registrada. A Gupy busca por termos próprios e ainda não passa por esse filtro.
 - **Deduplicação.** Na raw `jobs`: dedup por `link` (UNIQUE) e por `(origem, id_externo)`. Na Silver: uma vaga por `id_externo` (sem ele, pelo link), mantendo a observação mais recente, e uma vaga por portal + título + empresa + local, sem acento nem diferença de caixa. A chave de conteúdo só existe quando empresa e local são conhecidos, para não juntar vagas diferentes.
 - **Senioridade.** O nível do portal tem prioridade. Sem ele, o `seniority_service` testa as evidências abaixo, em ordem, e fica com a primeira que acerta:
   1. palavra de nível no título (mesma regra do `NormalizeService`, com algumas palavras a mais, como `mid-level` e `intern`, e sem ler "PL/SQL" ou "PL-300" como Pleno);
@@ -277,7 +277,7 @@ hub_vagas/
 
 ## Tecnologias identificadas nas descrições
 
-18 termos monitorados em `dbt/macros/monitored_technologies.sql` (Gold): Python, SQL, AWS, Azure, GCP, Spark, Airflow, Kafka, Docker, Kubernetes, PostgreSQL, MySQL, Oracle, MongoDB, Power BI, Tableau, Databricks e Snowflake.
+18 termos monitorados em `dbt/seeds/tecnologias_monitoradas.csv` (fonte única, compartilhada com o Python): Python, SQL, AWS, Azure, GCP, Spark, Airflow, Kafka, Docker, Kubernetes, PostgreSQL, MySQL, Oracle, MongoDB, Power BI, Tableau, Databricks e Snowflake.
 
 ---
 
@@ -410,7 +410,23 @@ O `app/run_dbt.py` lê o `.env` e configura a conexão a partir de `DATABASE_URL
 | Silver | raw `jobs` → `silver.jobs` | `stg_*`, `jobs` | view / tabela |
 | Gold | Silver → `gold.mart_vagas` | `mart_vagas` | tabela |
 
-Os demais marts Gold (`mart_vagas_por_dia`, `mart_vagas_por_origem_localidade`, `mart_demanda_tecnologias`, `mart_status_fontes`) estão planejados para remoção; as visualizações serão construídas diretamente no Power BI.
+Os demais marts Gold (`mart_vagas_por_dia`, `mart_vagas_por_origem_localidade`, `mart_demanda_tecnologias`, `mart_status_fontes`, `mart_salarios`, `mart_qualidade_campos`) estão ativos e disponíveis para consumo direto pelo Power BI ou por outras ferramentas de BI.
+
+### Conexão Power BI → PostgreSQL
+
+Em vez de exportar manualmente para Excel, o Power BI pode ler direto das tabelas Gold no PostgreSQL:
+
+1. No Power BI Desktop: **Obter Dados → PostgreSQL database**
+2. Informe host, porta, database, usuário e senha (do `.env`)
+3. Selecione as tabelas do schema `gold`:
+   - `gold.mart_vagas` — base principal (exportação e dashboard)
+   - `gold.mart_salarios` — cobertura salarial por origem
+   - `gold.mart_vagas_por_dia` — volume de coleta por dia/portal
+   - `gold.mart_demanda_tecnologias` — ranking de tecnologias
+   - `gold.mart_qualidade_campos` — saúde do parser por fonte/campo
+4. Carregue e modele no Power BI. Mantenha o Excel (`data/exports/vagas.xlsx`) como entrega portátil.
+
+> **Dica:** publique prints do dashboard do Power BI neste README para servir de vitrine do projeto.
 
 Além dos testes declarados nos `.yml` (não nulo, único, valores aceitos), há testes em `dbt/tests/` que protegem a Silver: sem ID repetido no mesmo portal, sem vaga repetida por conteúdo e sem o texto "Não informado" nos campos.
 

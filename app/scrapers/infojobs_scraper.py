@@ -1,7 +1,6 @@
 import copy
 import os
 import re
-import time
 from urllib.parse import urljoin
 
 import requests
@@ -48,100 +47,34 @@ class InfoJobsScraper(BaseScraper):
 
     _ID_NO_LINK = re.compile(r"__(\d+)\.aspx")
 
+    # ── Template Method: filhos implementam ──────────────────────────────
+
     @classmethod
-    def coletar(cls) -> ScrapeResult:
-        todas_vagas: list[JobSchema] = []
-        paginas_processadas = 0
-        cards_invalidos = 0
-        descartadas_total = 0
-        erro_coleta = None
-        # Links de TODOS os cards válidos já vistos (do tema ou não): é isso que
-        # detecta paginação repetida e fim da lista, independente do filtro.
-        links_vistos: set[str] = set()
-
-        # Requests mantém TLS habilitado. Em redes com proxy, a CA confiável
-        # pode ser informada por REQUESTS_CA_BUNDLE ou CURL_CA_BUNDLE.
-        ca_bundle = os.getenv("REQUESTS_CA_BUNDLE") or os.getenv("CURL_CA_BUNDLE") or True
-
-        for page_num in range(1, cls.MAX_PAGES + 1):
-            url = cls.BASE_URL.format(page=page_num)
-            cls._log(f"Coletando página {page_num}/{cls.MAX_PAGES}")
-
-            try:
-                response = requests.get(
-                    url,
-                    headers=cls.HEADERS,
-                    timeout=cls.TIMEOUT,
-                    verify=ca_bundle,
-                )
-                response.raise_for_status()
-            except requests.RequestException as exc:
-                erro_coleta = f"Página {page_num}: {type(exc).__name__}: {exc}"
-                cls._log(f"Falha na requisição: {erro_coleta}")
-                break
-
-            paginas_processadas += 1
-            vagas_pagina, invalidos, cards_encontrados = cls._parsear_detalhado(
-                response.content
-            )
-            cards_invalidos += invalidos
-
-            if not vagas_pagina:
-                if links_vistos and cards_encontrados == 0:
-                    break  # fim normal da paginação
-                if not links_vistos and cls._pagina_sem_resultados(response.content):
-                    break  # estado vazio explícito do portal
-                if cards_encontrados == 0:
-                    erro_coleta = (
-                        f"A página não contém o seletor esperado "
-                        f"'{INFOJOBS_JOB_CARD}'."
-                    )
-                elif invalidos:
-                    erro_coleta = (
-                        f"{invalidos} card(s) sem título ou link válido."
-                    )
-                break
-
-            vagas_novas = [
-                vaga for vaga in vagas_pagina if vaga.link not in links_vistos
-            ]
-            if not vagas_novas:
-                cls._log(
-                    f"Página {page_num} repetiu links anteriores; encerrando paginação."
-                )
-                break
-
-            links_vistos.update(vaga.link for vaga in vagas_novas)
-            todas_vagas.extend(vagas_novas)
-            cls._log(
-                f"Página {page_num}: {len(vagas_novas)} vaga(s) de {len(vagas_pagina)} card(s) (filtro de relevância será aplicado centralmente)"
-            )
-
-            if page_num < cls.MAX_PAGES:
-                time.sleep(1)
-
-        if erro_coleta:
-            status = ScrapeStatus.PARTIAL if links_vistos else ScrapeStatus.FAILED
-        elif cards_invalidos:
-            status = ScrapeStatus.PARTIAL
-            erro_coleta = f"{cards_invalidos} card(s) ignorado(s) por dados incompletos."
-        elif todas_vagas:
-            status = ScrapeStatus.SUCCESS
-        else:
-            status = ScrapeStatus.EMPTY
-
-        cls._log(
-            f"Resultado: {status.value}; {len(todas_vagas)} vaga(s) (filtro de relevância será aplicado centralmente); "
-            f"{paginas_processadas} página(s) processada(s)"
+    def _buscar_pagina(cls, numero_pagina: int) -> bytes:
+        """Faz o request HTTP da página paginada do InfoJobs."""
+        url = cls.BASE_URL.format(page=numero_pagina)
+        ca_bundle = (
+            os.getenv("REQUESTS_CA_BUNDLE")
+            or os.getenv("CURL_CA_BUNDLE")
+            or True
         )
-        return ScrapeResult(
-            source=cls.SOURCE,
-            status=status,
-            jobs=todas_vagas,
-            pages_processed=paginas_processadas,
-            error=erro_coleta,
-            discarded=0,
+        response = requests.get(
+            url,
+            headers=cls.HEADERS,
+            timeout=cls.TIMEOUT,
+            verify=ca_bundle,
         )
+        response.raise_for_status()
+        return response.content
+
+    @classmethod
+    def _parsear_cards(
+        cls, conteudo: bytes
+    ) -> tuple[list[JobSchema], int, int]:
+        """Extrai (vagas válidas, cards inválidos, total de cards) do HTML."""
+        return cls._parsear_detalhado(conteudo)
+
+    # ── Helpers de parse (filho) ─────────────────────────────────────────
 
     @classmethod
     def _parsear(cls, conteudo: bytes) -> list[JobSchema]:
@@ -163,14 +96,11 @@ class InfoJobsScraper(BaseScraper):
     @staticmethod
     def _extrair_local(card):
         for elemento in card.select(INFOJOBS_LOCATION):
-            # O bloco de metadados também tem a classe mb-8: não é o local.
             if elemento.select_one("svg") or "d-inline-flex" in (elemento.get("class") or []):
                 continue
-            # Trabalha numa cópia: decompor o ruído no card original apagaria da Bronze a
-            # distância e as coordenadas (data-vagalatitude/longitude) da vaga.
             local = copy.copy(elemento)
             for ruido in local.select(INFOJOBS_LOCATION_NOISE):
-                ruido.decompose()  # trecho oculto ", 0 Km de você."
+                ruido.decompose()
             return valor_ou_none(local.get_text(" ", strip=True))
         return None
 
@@ -178,7 +108,6 @@ class InfoJobsScraper(BaseScraper):
     def _extrair_descricao(card):
         for elemento in reversed(card.select(INFOJOBS_DESCRIPTION)):
             classes = elemento.get("class") or []
-            # Pula o bloco de metadados (tem ícones) e a data ("30 out").
             if elemento.select_one("svg") or "text-nowrap" in classes:
                 continue
             texto = valor_ou_none(elemento.get_text(" ", strip=True))
@@ -208,8 +137,6 @@ class InfoJobsScraper(BaseScraper):
                 cards_invalidos += 1
                 continue
 
-            # O fragmento da Bronze é tirado ANTES de ler os campos: guarda o HTML original
-            # do portal, não o card depois de mexermos nele.
             html_fragment = str(card)
 
             id_externo = card.get("data-id")
@@ -223,9 +150,6 @@ class InfoJobsScraper(BaseScraper):
             descricao = cls._extrair_descricao(card)
             experiencia = metadados.get("experiencia")
 
-            # O InfoJobs não tem campo de nível (o ícone "suitcase" é experiência). A
-            # senioridade sai da cascata: título, nível explícito na descrição, campo de
-            # experiência e "N anos" na descrição. A origem fica na Bronze para auditoria.
             senioridade = classificar_senioridade(
                 titulo, experiencia=experiencia, descricao=descricao
             )

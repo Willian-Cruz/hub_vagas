@@ -240,6 +240,12 @@ hub_vagas/
 │   ├── transform.py           # TRANSFORMAÇÃO: dbt build (raw → Bronze → Silver → Gold)
 │   ├── run_dbt.py             # CLI dbt com credenciais carregadas do .env
 │   └── scheduler.py           # execução agendada da ingestão
+├── check_catho.py             # verificação de qualidade dos dados da Catho
+├── check_data_quality.py      # verificação geral de qualidade de dados
+├── check_gold_tech.py         # verificação de tecnologias na camada Gold
+├── check_nulls.py             # verificação de campos NULL
+├── check_silver_catho.py      # verificação específica da Silver para Catho
+├── check_values.py            # verificação de valores válidos
 ├── dbt/
 │   ├── macros/                # normalização de campos, tecnologias monitoradas, nomes de schema, select_raw_jobs
 │   ├── models/                # sources.yml (raw + bronze), staging/, intermediate/ (Silver) e marts/ (Gold)
@@ -261,7 +267,7 @@ hub_vagas/
 | Vagas.com | Playwright (scroll infinito) + BeautifulSoup | Implementado: ID, data de publicação, posições, local, nível e descrição do card. Salário só na página de detalhe |
 | InfoJobs | requests + BeautifulSoup, paginado | Implementado: salário, experiência, escolaridade, modalidade, data exata, ID e senioridade em cascata (título, descrição e experiência) |
 | Gupy | Playwright + BeautifulSoup, por termos de busca | Implementado, com calibração de seletores pendente (`app/scrapers/gupy_scraper.py`). Ainda não usa o filtro de relevância nem devolve `NULL`; a Silver trata os textos "Não informado" |
-| Catho | — | Parser dos cards pronto e testado com HTML real (`app/scrapers/catho_parser.py`): empresa, local, posições, salário, data e senioridade pelo título. Falta o scraper (busca, paginação e coleta) |
+| Catho | — | Parser dos cards pronto e testado com HTML real (`app/scrapers/catho_parser.py`): empresa, local, posições, salário, data e senioridade pelo título. Falta o scraper (busca, paginação e coleta). Scripts de verificação de qualidade: `check_catho.py`, `check_silver_catho.py` |
 | Remotar, Sólides | — | Próximos (mesmo contrato dos scrapers atuais) |
 | LinkedIn, Indeed, Glassdoor | — | Planejados |
 
@@ -450,6 +456,7 @@ O GitHub Actions roda o `pytest` a cada push e pull request na `main`. O `dbt bu
 | 12 (nov/2026) | Revisão dos scrapers do Vagas.com e InfoJobs com HTML real: campos vazios viram `NULL`, novos campos, filtro de relevância, deduplicação por ID e conteúdo (migração `004`). No dbt, `NULL`, campos novos e deduplicação na Silver. Correções na gravação Bronze, no `run_dbt.py` e na exportação para Excel |
 | 13 (nov/2026) | Senioridade em cascata (portal, título, descrição e experiência), com a origem registrada na Bronze; parser da Catho testado com HTML real; correções no InfoJobs: modalidade lida pelos três ícones do card (antes só "Presencial") e fragmento HTML original preservado na Bronze |
 | 14 (nov/2026) | **Arquitetura medallion com `jobs` como raw**: `main.py` executa apenas scrape → raw `jobs`; `transform.py` executa dbt build (raw → Bronze → Silver → Gold); `scheduler.py` desacoplado do dbt; `PipelineService` grava na raw `jobs` e em `bronze.scrape_runs`; dbt lê da raw `jobs` (não mais do JSONB do Bronze) |
+| 15 (nov/2026) | Coleta e parser da Catho com HTML real, senioridade por título, staging `stg_catho_jobs` no dbt, scripts de verificação de qualidade (`check_*.py`), ajustes na macro `classify_seniority_cascade` e testes de NULL na Silver |
 
 ---
 
@@ -458,7 +465,7 @@ O GitHub Actions roda o `pytest` a cada push e pull request na `main`. O `dbt bu
 - Calibrar os seletores do scraper da Gupy e aplicar a ele o filtro de relevância, o contrato de `NULL` e a cascata de senioridade
 - Corrigir a senioridade lida pelo pipeline (`NormalizeService` e macro `normalize_seniority`): "PL/SQL" e "PL-300" viram Pleno, e o rótulo "Liderança" não é reconhecido quando já vem pronto do scraper
 - Buscar a página de detalhe da vaga (descrição completa e salário) nos portais que só mostram um resumo no card; a senioridade inferida pela descrição também ganha com isso
-- Transformar o parser da Catho em scraper, adicionar Remotar e Sólides, e depois LinkedIn, Indeed e Glassdoor
+- Transformar o parser da Catho em scraper (busca, paginação, coleta), adicionar Remotar e Sólides, e depois LinkedIn, Indeed e Glassdoor
 - Migrar o `AnalyticsService` para a Gold e aposentar a tabela `jobs`
 - Publicar prints do dashboard do Power BI neste README
 

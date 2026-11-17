@@ -28,8 +28,8 @@ ranked as (
     select
         *,
         row_number() over (
-            partition by coalesce(source_job_id, link)
-            order by collected_at desc, id desc
+            partition by coalesce(id_externo, link)
+            order by data_coleta desc, raw_job_id desc
         ) as rn
     from observacoes
 )

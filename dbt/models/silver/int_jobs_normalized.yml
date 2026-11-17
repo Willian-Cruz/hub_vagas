@@ -1,15 +1,9 @@
 version: 2
 
 models:
-  - name: jobs
-    description: "Camada Silver: todas as linhas são mantidas, com marcação de dedup (is_canonical)."
+  - name: int_jobs_normalized
+    description: "Silver etapa 2/3: normalização de campos (senioridade, localização, salário, modalidade)."
     columns:
-      - name: origem
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ["Vagas.com", "InfoJobs", "Gupy", "Catho"]
       - name: raw_job_id
         tests: [not_null, unique]
       - name: link
@@ -20,13 +14,7 @@ models:
         tests: [not_null]
       - name: is_relevant
         tests: [not_null]
-      - name: first_seen_at
-        tests: [not_null]
-      - name: last_seen_at
-        tests: [not_null]
-      - name: dedup_group_id
-        tests: [not_null]
-      - name: is_canonical
+      - name: descricao_truncada
         tests: [not_null]
       - name: senioridade
         tests:

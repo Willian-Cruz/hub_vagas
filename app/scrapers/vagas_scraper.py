@@ -34,7 +34,8 @@ class VagasScraper(BaseScraper):
         "https://www.vagas.com.br/vagas-de-engenheiro-de-dados"
         "?ordenar_por=mais_recentes"
     )
-    MAX_PAGES = 20  # máximo de scrolls após o carregamento da página inicial
+    # O infinite scroll é feito na "página 1"; páginas 2+ não existem.
+    MAX_PAGES = 1
     RESULTS_WAIT_MS = 10_000
     NEW_RESULTS_WAIT_MS = 6_000
     MAX_NO_CHANGE = 3
@@ -47,12 +48,39 @@ class VagasScraper(BaseScraper):
     )
 
     _ID_NO_LINK = re.compile(r"/vagas/v(\d+)")
+    _pagina_carregada = False  # garante scroll apenas na primeira chamada
+
+    # ── Template Method: filhos implementam ──────────────────────────────
 
     @classmethod
-    def coletar(cls) -> ScrapeResult:
-        paginas_processadas = 0
-        browser = None
+    def _buscar_pagina(cls, numero_pagina: int) -> str:
+        """Carrega a página do Vagas.com com infinite scroll (apenas página 1).
 
+        Para numero_pagina > 1, retorna string vazia para encerrar a paginação.
+        """
+        if numero_pagina > 1:
+            return ""
+
+        if cls._pagina_carregada:
+            return ""
+
+        html = cls._carregar_com_scroll()
+        cls._pagina_carregada = True
+        return html
+
+    @classmethod
+    def _parsear_cards(
+        cls, conteudo: str
+    ) -> tuple[list[JobSchema], int, int]:
+        """Extrai (vagas válidas, cards inválidos, total de cards) do HTML."""
+        return cls._parsear_detalhado(conteudo)
+
+    # ── Helpers de Playwright (filho) ────────────────────────────────────
+
+    @classmethod
+    def _carregar_com_scroll(cls) -> str:
+        """Navega para a URL, faz infinite scroll e retorna o HTML final."""
+        browser = None
         try:
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(headless=True)
@@ -64,13 +92,10 @@ class VagasScraper(BaseScraper):
                         timeout=cls.NAVIGATION_TIMEOUT_MS,
                         wait_until="domcontentloaded",
                     )
-                    paginas_processadas = 1
 
                     status_http = getattr(response, "status", None)
                     if status_http is not None and status_http >= 400:
-                        return cls._resultado_falha(
-                            f"Portal respondeu HTTP {status_http}.", paginas_processadas
-                        )
+                        raise RuntimeError(f"Portal respondeu HTTP {status_http}.")
 
                     try:
                         page.wait_for_selector(
@@ -82,29 +107,16 @@ class VagasScraper(BaseScraper):
                         html = page.content()
                         jobs, invalidos, cards = cls._parsear_detalhado(html)
                         if jobs:
-                            return ScrapeResult(
-                                source=cls.SOURCE,
-                                status=ScrapeStatus.PARTIAL,
-                                jobs=jobs,
-                                pages_processed=paginas_processadas,
-                                error="Timeout aguardando o seletor; cards apareceram no HTML.",
-                                discarded=0,
-                            )
+                            return html
                         if cards == 0 and cls._pagina_sem_resultados(html):
-                            return ScrapeResult(
-                                source=cls.SOURCE,
-                                status=ScrapeStatus.EMPTY,
-                                pages_processed=paginas_processadas,
-                            )
-                        detalhe = (
-                            f"{invalidos} card(s) sem título ou link válido."
-                            if invalidos
-                            else f"Nenhum card '{VAGAS_JOB_CARD}' apareceu após o carregamento."
+                            return html
+                        raise RuntimeError(
+                            f"{invalidos} card(s) sem título ou link válido. "
+                            f"Nenhum card '{VAGAS_JOB_CARD}' apareceu após o carregamento."
                         )
-                        return cls._resultado_falha(detalhe, paginas_processadas)
 
                     sem_novidade = 0
-                    for scroll_num in range(cls.MAX_PAGES):
+                    for scroll_num in range(20):  # máximo de scrolls
                         vagas_antes = page.locator(VAGAS_JOB_CARD).count()
                         page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
 
@@ -121,7 +133,7 @@ class VagasScraper(BaseScraper):
 
                         vagas_depois = page.locator(VAGAS_JOB_CARD).count()
                         cls._log(
-                            f"Scroll {scroll_num + 1}/{cls.MAX_PAGES}: "
+                            f"Scroll {scroll_num + 1}/20: "
                             f"{vagas_depois} card(s) carregados"
                         )
 
@@ -130,63 +142,14 @@ class VagasScraper(BaseScraper):
                         if vagas_depois > vagas_antes:
                             time.sleep(0.5)
 
-                    html = page.content()
-                    jobs, invalidos, cards = cls._parsear_detalhado(html)
-
-                    if not jobs:
-                        if cards == 0 and cls._pagina_sem_resultados(html):
-                            return ScrapeResult(
-                                source=cls.SOURCE,
-                                status=ScrapeStatus.EMPTY,
-                                pages_processed=paginas_processadas,
-                            )
-                        detalhe = (
-                            f"{invalidos} card(s) sem título ou link válido."
-                            if invalidos
-                            else f"HTML não contém cards válidos '{VAGAS_JOB_CARD}'."
-                        )
-                        return cls._resultado_falha(detalhe, paginas_processadas)
-
-                    if invalidos:
-                        status = ScrapeStatus.PARTIAL
-                    elif jobs:
-                        status = ScrapeStatus.SUCCESS
-                    else:
-                        status = ScrapeStatus.EMPTY
-                    erro = (
-                        f"{invalidos} card(s) ignorado(s) por dados incompletos."
-                        if invalidos
-                        else None
-                    )
-                    cls._log(
-                        f"Resultado: {status.value}; {len(jobs)} vaga(s) (filtro de relevância será aplicado centralmente)"
-                    )
-                    return ScrapeResult(
-                        source=cls.SOURCE,
-                        status=status,
-                        jobs=jobs,
-                        pages_processed=paginas_processadas,
-                        error=erro,
-                        discarded=0,
-                    )
+                    return page.content()
                 finally:
                     browser.close()
         except Exception as exc:
-            return cls._resultado_falha(
-                f"{type(exc).__name__}: {exc}", paginas_processadas
-            )
+            cls._log(f"Falha na navegação: {exc}")
+            raise
 
-        return cls._resultado_falha("A navegação terminou sem resultado.", paginas_processadas)
-
-    @classmethod
-    def _resultado_falha(cls, erro: str, paginas_processadas: int) -> ScrapeResult:
-        cls._log(f"Falha na coleta: {erro}")
-        return ScrapeResult(
-            source=cls.SOURCE,
-            status=ScrapeStatus.FAILED,
-            pages_processed=paginas_processadas,
-            error=erro,
-        )
+    # ── Helpers de parse (filho) ─────────────────────────────────────────
 
     @classmethod
     def _parsear(cls, html: str) -> list[JobSchema]:
@@ -245,8 +208,6 @@ class VagasScraper(BaseScraper):
         for card in cards:
             link_el = card.select_one(VAGAS_TITLE)
             href = (link_el.get("href") or "").strip() if link_el else ""
-            # O atributo title vem limpo; o texto do <a> traz espaços extras
-            # onde há <mark> ("Engenheiro (a)" em vez de "Engenheiro(a)").
             titulo = ""
             if link_el is not None:
                 titulo = normalizar_espacos(
@@ -279,7 +240,6 @@ class VagasScraper(BaseScraper):
                     empresa=cls._texto(card.select_one(VAGAS_COMPANY)),
                     senioridade=cls._texto(card.select_one(VAGAS_SENIORITY)),
                     localizacao=cls._extrair_local(card),
-                    # sem separador: o <mark> não pode partir palavras ao meio
                     descricao=(
                         valor_ou_none(descricao_el.get_text("", strip=False))
                         if descricao_el is not None

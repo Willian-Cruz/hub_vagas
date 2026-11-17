@@ -246,16 +246,16 @@ flowchart TD
 
 | Padrão | Onde | Descrição |
 |--------|------|-----------|
-| **Repository Pattern** | `job_repository.py`, `bronze_repository.py` | Isola lógica de persistência |
-| **Strategy Pattern** | `base_scraper.py` + subclasses | Cada portal implementa `coletar()` |
-| **Template Method** | `BaseScraper.coletar()` | Fluxo fixo, parsing customizável |
+| **Repository Pattern** | `job_repository.py`, `bronze_repository.py` | Isola lógica de persistência; `salvar()` grava payload bruto em `raw.job_observations` sem normalização |
+| **Strategy Pattern** | `base_scraper.py` + subclasses | Cada portal implementa `_buscar_pagina()` e `_parsear_cards()` |
+| **Template Method** | `BaseScraper.coletar()` | Pai cuida do loop de páginas, detecção de repetida, tratamento de exceção e montagem do `ScrapeResult`; filhos implementam `_buscar_pagina()` e `_parsear_cards()` |
 | **Pipeline/Chain of Responsibility** | `seniority_service.py` | Cascata: portal → título → descrição → experiência → anos |
 | **Decorator (Logging)** | `utils/logger.py` | Rotação arquivo + console |
 | **Factory** | `run_dbt.py` | Cria `profiles.yml` dinâmico do `.env` |
-| **Configuration as Code** | `settings.py` (Pydantic), `dbt_project.yml` | Tipagem + validação |
-| **Idempotency** | Migrações SQL, `JobRepository.salvar()` | Re-executável sem side effects |
-| **Append-Only** | `bronze.scrape_runs` | Histórico imutável de execuções |
-| **Separation of Concerns** | Python (ingestão) / dbt (transformação) | Linguagem certa para cada etapa |
+| **Configuration as Code** | `settings.py` (Pydantic), `dbt_project.yml`, `dbt/seeds/*.csv` | Tipagem + validação; seeds são fonte única de tecnologias e termos de relevância |
+| **Idempotency** | Migrações SQL (`infra/migrate.py`), `JobRepository.salvar()` | Re-executável sem side effects; `schema_migrations` rastreia o que foi aplicado |
+| **Append-Only** | `bronze.scrape_runs`, `raw.job_observations` | Histórico imutável de execuções e observações brutas |
+| **Separation of Concerns** | Python (ingestão) / dbt (transformação) | Linguagem certa para cada etapa; Python não normaliza, dbt é o dono das regras de negócio |
 
 ---
 
@@ -296,7 +296,7 @@ flowchart TD
 | Limitação Atual | Solução |
 |-----------------|---------|
 | **Single-thread scrapers** | Paralelizar `CollectorService` com `ThreadPoolExecutor` ou `asyncio` |
-| **Scheduler em processo único** | Migrar para Airflow/Prefect/Dagster ou Celery Beat + Workers |
+| **Scheduler em processo único** | Agendador de Tarefas (Windows) ou GitHub Actions schedule; Airflow/Dagster/Prefect somente se o objetivo for aprender orquestrador |
 | **DB local único** | Read replicas para dbt; connection pooling (PgBouncer) |
 | **Estado em memória** | Persistir `run_id` + checkpoint para resume em falha |
 | **Rate limiting** | Implementar backoff exponencial + respect `robots.txt` |
@@ -326,27 +326,39 @@ flowchart TD
 
 **Severidade dos testes:** `severity: warn` + meta documentada para limitações conhecidas (modalidade, salário); `severity: error` para invariantes (unicidade, sem placeholder).
 
-### 7.5 Roadmap Arquitetural
+### 7.5 Roadmap Arquitetural (com gatilhos mensuráveis)
 
 ```
 CURTO PRAZO (1-2 sprints)
-├── Calibrar Gupy (seletores + relevância + NULL contract)
+├── Calibrar Gupy (seletores + relevância + NULL contract) —
+│   gatilho: GUPY_ENABLED=true apenas quando houver fixtures reais
 ├── Buscar página detalhe Vagas.com/Catho (salário, modalidade, descrição)
-├── Modelos dbt incrementais (Silver/Gold)
-└── Unificar cascata senioridade (macro dbt single source)
+│   gatilho: %NULL de salario/modalidade > 50% por 2 semanas seguidas
+├── Modelos dbt incrementais (Silver/Gold) —
+│   gatilho: dbt build > 5 min ou Silver > 1 milhão de linhas
+└── Unificar cascata senioridade (macro dbt single source) — concluído (P3)
 
 MÉDIO PRAZO (1-2 meses)
-├── Migrar agendamento para Airflow/Prefect
+├── Agendamento: Agendador de Tarefas (Windows) ou GitHub Actions schedule
+│   Airflow/Dagster/Prefect somente se o objetivo for aprender orquestrador
 ├── Adicionar portal Remotar + Sólides
-├── Pipeline de alertas (Slack/Email) para falhas/freshness
+├── Pipeline de alertas (webhook Discord/Telegram ou e-mail) para falhas/freshness
+│   já implementado em app/notifier.py
 └── Testes de contrato de schema (dbt-expectations / Great Expectations)
 
 LONGO PRAZO (3-6 meses)
-├── Streaming/near-real-time (Kafka + Flink/dbt streaming)
-├── Feature store para ML (salary prediction, seniority classification)
-├── Data contracts formais (OpenLineage / dbt contracts)
-└── Multi-tenant (vários clientes, isolamento por schema)
+├── Data contracts formais (dbt contracts)
+├── Particionamento e índices (tsvector/GIN) —
+│   gatilho: Silver > 1 milhão de linhas ou consultas > 10s
+└── Streaming/near-real-time —
+    gatilho: necessidade de dados < 1 hora de atraso (não o caso atual com ~300 vagas)
+
+Itens REMOVIDOS do roadmap (não respondem a dor real com ~300 vagas):
+  ✗ Kafka + Flink (streaming desnecessário para batch diário)
+  ✗ Feature store para ML (não há modelos de ML no escopo)
+  ✗ Multi-tenant (isolamento por schema não é necessário para um único cliente)
 ```
+
 
 ---
 

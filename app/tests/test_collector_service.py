@@ -33,7 +33,7 @@ class LegacyScraper(BaseScraper):
 
 
 def test_coletor_preserva_status_de_cada_fonte(monkeypatch):
-    monkeypatch.setattr(CollectorService, "SCRAPERS", [FakeScraper])
+    monkeypatch.setattr(CollectorService, "_SCRAPERS_BASE", [FakeScraper])
 
     resultados = CollectorService.coletar_resultados()
 
@@ -44,7 +44,7 @@ def test_coletor_preserva_status_de_cada_fonte(monkeypatch):
 
 
 def test_coletor_converte_excecao_em_resultado_failed(monkeypatch):
-    monkeypatch.setattr(CollectorService, "SCRAPERS", [BrokenScraper])
+    monkeypatch.setattr(CollectorService, "_SCRAPERS_BASE", [BrokenScraper])
 
     resultados = CollectorService.coletar_resultados()
 
@@ -55,7 +55,7 @@ def test_coletor_converte_excecao_em_resultado_failed(monkeypatch):
 
 
 def test_coletor_sinaliza_scraper_fora_do_contrato(monkeypatch):
-    monkeypatch.setattr(CollectorService, "SCRAPERS", [LegacyScraper])
+    monkeypatch.setattr(CollectorService, "_SCRAPERS_BASE", [LegacyScraper])
 
     resultados = CollectorService.coletar_resultados()
 

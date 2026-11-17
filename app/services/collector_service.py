@@ -1,4 +1,5 @@
 from time import perf_counter
+import os
 
 from scrapers.base_scraper import ScrapeResult, ScrapeStatus
 from scrapers.catho_scraper import CathoScraper
@@ -10,17 +11,28 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Feature flag: Gupy desligado por padrão até ser calibrado (item #12/P3).
+# Defina GUPY_ENABLED=true para reativar.
+GUPY_ENABLED = os.getenv("GUPY_ENABLED", "false").lower() == "true"
+
 
 class CollectorService:
     """Executa os scrapers e preserva um resultado por fonte."""
 
-    SCRAPERS = [VagasScraper, InfoJobsScraper, GupyScraper, CathoScraper]
+    _SCRAPERS_BASE = [VagasScraper, InfoJobsScraper, CathoScraper]
+
+    @classmethod
+    def _scrapers(cls) -> list:
+        scrapers = list(cls._SCRAPERS_BASE)
+        if GUPY_ENABLED:
+            scrapers.append(GupyScraper)
+        return scrapers
 
     @classmethod
     def coletar_resultados(cls) -> list[ScrapeResult]:
         resultados: list[ScrapeResult] = []
 
-        for scraper in cls.SCRAPERS:
+        for scraper in cls._scrapers():
             fonte = getattr(scraper, "SOURCE", scraper.__name__)
             inicio = perf_counter()
             logger.info("Iniciando scraper: %s", fonte)

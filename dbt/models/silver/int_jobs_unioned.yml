@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: int_jobs_unioned
+    description: "Silver etapa 1/3: união das 4 fontes de staging + limpeza básica (placeholder -> NULL)."
+    columns:
+      - name: raw_job_id
+        tests: [not_null, unique]
+      - name: origem
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["Vagas.com", "InfoJobs", "Gupy", "Catho"]
+      - name: link
+        tests: [not_null]
+      - name: data_coleta
+        tests: [not_null]
+      - name: titulo
+        tests: [not_null]
+      - name: is_relevant
+        tests: [not_null]

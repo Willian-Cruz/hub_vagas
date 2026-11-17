@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: jobs
+    description: "Camada Silver: alias para a etapa final de dedup (int_jobs_deduped). Todas as linhas são mantidas, com marcação de dedup (is_canonical)."
+    columns:
+      - name: origem
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["Vagas.com", "InfoJobs", "Gupy", "Catho"]
+      - name: raw_job_id
+        tests: [not_null, unique]
+      - name: link
+        tests: [not_null]
+      - name: data_coleta
+        tests: [not_null]
+      - name: titulo
+        tests: [not_null]
+      - name: is_relevant
+        tests: [not_null]
+      - name: first_seen_at
+        tests: [not_null]
+      - name: last_seen_at
+        tests: [not_null]
+      - name: dedup_group_id
+        tests: [not_null]
+      - name: is_canonical
+        tests: [not_null]
+      - name: senioridade
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["Estágio/Trainee", "Júnior", "Pleno", "Sênior", "Especialista", "Coordenador", "Liderança", "Diretoria", "Técnico"]
+      - name: data_publicacao_precisao
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["hora", "dia", "estimada"]

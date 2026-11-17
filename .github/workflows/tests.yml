@@ -5,9 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Executa dbt build com PostgreSQL toda segunda-feira às 02:00 UTC
+    - cron: "0 2 * * 1"
 
 jobs:
 
+  # ── Job 1: Testes unitários (sem banco, rápido) ──────────────────────
   test:
     name: Testes unitarios
     runs-on: ubuntu-latest
@@ -25,6 +29,154 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Rodar testes
-        run: pytest tests/ -v --tb=short
+      - name: Rodar testes unitarios
+        run: pytest tests/ -m "not integration" -q --tb=short
         working-directory: ./app
+
+  # ── Job 2: Testes de integracao com PostgreSQL ───────────────────────
+  integration:
+    name: Testes de integracao (PostgreSQL)
+    runs-on: ubuntu-latest
+    needs: test
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: hub_vagas
+          POSTGRES_PASSWORD: hub_vagas
+          POSTGRES_DB: hub_vagas
+        options: >-
+          --health-cmd "pg_isready -U hub_vagas -d hub_vagas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Instalar dbt e adaptador Postgres
+        run: pip install dbt-core dbt-postgres
+
+      - name: Criar .env para integracao
+        run: |
+          cat > app/.env <<EOF
+          DATABASE_URL=postgresql+psycopg://hub_vagas:hub_vagas@localhost:5432/hub_vagas
+          DB_HOST=localhost
+          DB_PORT=5432
+          DB_NAME=hub_vagas
+          DB_USER=hub_vagas
+          DB_PASS=hub_vagas
+          DB_SSLMODE=disable
+          EOF
+
+      - name: Rodar testes de integracao
+        run: pytest tests/ -m integration -q --tb=short
+        working-directory: ./app
+        env:
+          DATABASE_URL: postgresql+psycopg://hub_vagas:hub_vagas@localhost:5432/hub_vagas
+
+  # ── Job 3: dbt build com PostgreSQL (schedule semanal) ───────────────
+  dbt-build:
+    name: dbt build (PostgreSQL)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: hub_vagas
+          POSTGRES_PASSWORD: hub_vagas
+          POSTGRES_DB: hub_vagas
+        options: >-
+          --health-cmd "pg_isready -U hub_vagas -d hub_vagas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Instalar dbt e adaptador Postgres
+        run: pip install dbt-core dbt-postgres
+
+      - name: Criar profiles.yml e .env para dbt
+        run: |
+          mkdir -p dbt
+          cat > dbt/profiles.yml <<EOF
+          hub_vagas:
+            target: dev
+            outputs:
+              dev:
+                type: postgres
+                host: localhost
+                port: 5432
+                user: hub_vagas
+                password: hub_vagas
+                dbname: hub_vagas
+                schema: public
+                threads: 4
+          EOF
+          cat > app/.env <<EOF
+          DATABASE_URL=postgresql+psycopg://hub_vagas:hub_vagas@localhost:5432/hub_vagas
+          DB_HOST=localhost
+          DB_PORT=5432
+          DB_NAME=hub_vagas
+          DB_USER=hub_vagas
+          DB_PASS=hub_vagas
+          DB_SSLMODE=disable
+          EOF
+
+      - name: Rodar dbt build
+        run: python app/transform.py
+        working-directory: ./..
+        env:
+          DATABASE_URL: postgresql+psycopg://hub_vagas:hub_vagas@localhost:5432/hub_vagas
+
+  # ── Job 4: Lint com ruff ─────────────────────────────────────────────
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar ruff
+        run: pip install ruff
+
+      - name: Rodar ruff check
+        run: ruff check app/
+        working-directory: ./..
+        continue-on-error: true

@@ -1,8 +1,8 @@
 from services.collector_service import CollectorService
-from scrapers.base_scraper import ScrapeResult, ScrapeStatus
+from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
 
 
-class FakeScraper:
+class FakeScraper(BaseScraper):
     SOURCE = "FonteTeste"
 
     @classmethod
@@ -14,16 +14,18 @@ class FakeScraper:
         )
 
 
-class BrokenScraper:
+class BrokenScraper(BaseScraper):
     SOURCE = "FonteQuebrada"
+    MAX_RETRIES = 0  # não dormir nos testes
 
     @classmethod
     def coletar(cls):
         raise RuntimeError("falha simulada")
 
 
-class LegacyScraper:
+class LegacyScraper(BaseScraper):
     SOURCE = "FonteLegada"
+    MAX_RETRIES = 0  # não dormir nos testes
 
     @classmethod
     def coletar(cls):

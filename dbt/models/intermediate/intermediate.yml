@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: jobs
-    description: "Camada Silver: uma vaga padronizada por fonte e identificador."
+    description: "Camada Silver: todas as linhas são mantidas, com marcação de dedup (is_canonical)."
     columns:
       - name: origem
         tests:
@@ -23,6 +23,10 @@ models:
       - name: first_seen_at
         tests: [not_null]
       - name: last_seen_at
+        tests: [not_null]
+      - name: dedup_group_id
+        tests: [not_null]
+      - name: is_canonical
         tests: [not_null]
       - name: senioridade
         tests:

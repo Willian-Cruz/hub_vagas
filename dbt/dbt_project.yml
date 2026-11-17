@@ -35,3 +35,6 @@ models:
     marts:
       +schema: gold
       +materialized: table
+    seeds:
+      +schema: bronze
+      +materialized: table

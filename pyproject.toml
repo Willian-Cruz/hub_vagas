@@ -1,0 +1,22 @@
+[project]
+name = "hub_vagas"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.ruff]
+line-length = 100
+src = ["app"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "C4", "PLC", "PD", "PERF", "TRY", "UP"]
+ignore = ["E501", "B008"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: testes que exigem PostgreSQL (não rodam em CI sem services: postgres)",
+]
+testpaths = ["app/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

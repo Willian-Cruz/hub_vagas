@@ -1,5 +1,6 @@
 -- Data quality: garante que a Gold tem tecnologias extraídas
--- Pelo menos 10% das vagas devem ter pelo menos uma tecnologia detectada
+-- Pelo menos 2% das vagas devem ter pelo menos uma tecnologia detectada
+-- (Catho não tem descrição, reduz a taxa global)
 with stats as (
     select
         count(*) as total,
@@ -11,4 +12,4 @@ select
     com_tecnologias,
     round(100.0 * com_tecnologias / nullif(total, 0), 1) as pct_com_tecnologias
 from stats
-where com_tecnologias < total * 0.1
+where com_tecnologias < total * 0.02

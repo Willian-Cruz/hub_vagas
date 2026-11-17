@@ -38,6 +38,74 @@ sources:
           - name: qtd_posicoes
           - name: chave_conteudo
 
+  - name: raw
+    description: "Tabela raw `jobs`: dados brutos inseridos diretamente pelos scrapers (landing zone)."
+    schema: public
+    tables:
+      - name: jobs
+        description: "CAMADA LEGADA: tabela de origem das vagas até a transição para raw.job_observations ser concluída (P3). Não é mais gravada pelo Python."
+        loaded_at_field: data_coleta
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 72, period: hour}
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: titulo
+            tests: [not_null]
+          - name: empresa
+          - name: senioridade
+          - name: localizacao
+          - name: descricao
+          - name: salario
+          - name: link
+            tests: [not_null, unique]
+          - name: origem
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ["Vagas.com", "InfoJobs", "Gupy", "Catho"]
+          - name: data_coleta
+            tests: [not_null]
+          - name: id_externo
+          - name: data_publicacao
+          - name: modalidade
+          - name: experiencia
+          - name: escolaridade
+          - name: qtd_posicoes
+          - name: chave_conteudo
+
+  - name: raw_observations
+    description: "Tabela append-only `raw.job_observations`: payload bruto (JSONB) de cada coleta de vaga; fonte da Silver a partir da P3."
+    schema: raw
+    tables:
+      - name: job_observations
+        description: "Uma linha por coleta de vaga, com o payload bruto e o hash para dedup. Fonte da verdade para staging (P3)."
+        loaded_at_field: collected_at
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 72, period: hour}
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: run_id
+            tests: [not_null]
+          - name: source
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ["Vagas.com", "InfoJobs", "Gupy", "Catho"]
+          - name: source_job_id
+          - name: collected_at
+            tests: [not_null]
+          - name: payload_hash
+            tests: [not_null]
+          - name: raw_payload
+          - name: is_relevant
+            tests: [not_null]
+          - name: created_at
+            tests: [not_null]
+
   - name: bronze
     description: "Snapshots append-only gravados pelos scrapers em PostgreSQL (monitoramento de execução)."
     schema: bronze

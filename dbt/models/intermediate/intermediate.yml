@@ -18,6 +18,12 @@ models:
         tests: [not_null]
       - name: titulo
         tests: [not_null]
+      - name: is_relevant
+        tests: [not_null]
+      - name: first_seen_at
+        tests: [not_null]
+      - name: last_seen_at
+        tests: [not_null]
       - name: senioridade
         tests:
           - accepted_values:

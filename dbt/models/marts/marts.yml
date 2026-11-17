@@ -10,6 +10,18 @@ models:
         tests: [not_null]
       - name: origem
         tests: [not_null]
+      - name: descricao_truncada
+  - name: mart_salarios
+    description: "Cobertura salarial por origem: total de vagas, vagas com salário e percentual."
+    columns:
+      - name: origem
+        tests: [not_null]
+      - name: total_vagas
+        tests: [not_null]
+      - name: vagas_com_salario
+        tests: [not_null]
+      - name: pct_com_salario
+        tests: [not_null]
   - name: mart_vagas_por_dia
     description: "Volume de observações coletadas por dia e portal."
     columns:

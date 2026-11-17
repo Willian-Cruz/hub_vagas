@@ -142,7 +142,9 @@ class PipelineService:
             logger.info("Etapa 2/3: Gravando vagas na raw layer `jobs`...")
             try:
                 for vaga in vagas:
-                    resultado_salvamento = JobRepository.salvar(vaga)
+                    resultado_salvamento = JobRepository.salvar(
+                        vaga, run_id=run_id
+                    )
                     if resultado_salvamento == SALVA:
                         metricas["raw_salvas"] += 1
                     elif resultado_salvamento == DUPLICADA:

@@ -29,6 +29,7 @@ select
     jobs.descricao,
     jobs.data_publicacao,
     jobs.data_coleta,
+    jobs.descricao_truncada,
     coalesce(
         string_agg(distinct mentions.tecnologia, ', ' order by mentions.tecnologia),
         ''
@@ -53,4 +54,5 @@ group by
     jobs.link,
     jobs.descricao,
     jobs.data_publicacao,
-    jobs.data_coleta
+    jobs.data_coleta,
+    jobs.descricao_truncada

@@ -1,5 +1,7 @@
 # Hub Vagas — Job Market Analytics
 
+> **Aviso:** Este README descreve o estado do projeto em 06/11/2026 e está marcado como histórico. A fonte da verdade da arquitetura atual é [`ARCHITECTURE.md`](ARCHITECTURE.md). O conteúdo abaixo foi mantido para referência, mas pode conter tabelas, flags e contagens de testes que já não refletem o código.
+
 [![CI Hub Vagas](https://github.com/Willian-Cruz/hub_vagas/actions/workflows/tests.yml/badge.svg)](https://github.com/Willian-Cruz/hub_vagas/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-SQLAlchemy-336791?logo=postgresql&logoColor=white)
@@ -209,7 +211,7 @@ Vagas Silver enriquecidas com tecnologias.
   3. campo de experiência do portal: menos de 3 anos é Júnior, de 3 a 4 é Pleno e 5 ou mais é Sênior ("Sem experiência" é Júnior e "Só estágios" é Estágio/Trainee);
   4. "N anos de experiência" na descrição, pela mesma faixa.
 
-  Sem nenhuma evidência, o campo fica `NULL`. Hoje o InfoJobs usa a cascata inteira; o parser da Catho usa só o título, porque o card não traz descrição nem experiência. A origem da decisão (`titulo`, `descricao_nivel`, `experiencia_campo` ou `descricao_anos`) vai em `senioridade_origem`, dentro do `source_payload` do raw. Valores: Estágio/Trainee, Júnior, Pleno, Sênior, Especialista, Coordenador, Liderança, Diretoria e Técnico (este só quando o portal informa).
+  Sem nenhuma evidência, o campo fica `NULL`. Hoje o InfoJobs usa a cascata inteira; o parser da Catho usa só o título, porque o card não traz descrição nem experiência. Valores: Estágio/Trainee, Júnior, Pleno, Sênior, Especialista, Coordenador, Liderança, Diretoria e Técnico (este só quando o portal informa).
 - **Modalidade.** Remoto, Híbrido ou Presencial. Quando o portal não informa, vem da localização ("Home Office" vira Remoto).
 - **Salário.** Vem do portal; sem ele, de um valor `R$` na descrição; "A combinar" quando o texto indica. O card do Vagas.com não traz salário.
 - **Datas.** `data_publicacao` é a data do portal (o Vagas.com informa "Há N dias", então a precisão é de dia; o InfoJobs informa a data exata). `data_coleta` é o momento da coleta.

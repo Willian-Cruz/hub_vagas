@@ -1,0 +1,31 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: check-ast
+      - id: check-case-conflict
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+      - id: no-commit-to-branch
+        args: ["--branch=main"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+
+  - repo: local
+    hooks:
+      - id: bloquear-pyc-e-backup
+        name: Bloquear arquivos .pyc e backup*.sql
+        entry: bash -c 'if git diff --cached --name-only | grep -E "\.pyc$|backup.*\.sql$"; then echo "ERRO: commit contem .pyc ou backup*.sql"; exit 1; fi; exit 0'
+        language: system
+        files: \.pyc$|backup.*\.sql$
+        stages: [commit]

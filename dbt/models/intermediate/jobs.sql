@@ -1,4 +1,4 @@
-{# Silver: uma vaga por portal e identificador, sem repetidas.
+{# Silver: todas as linhas são mantidas (ninguém é apagado), com marcação de dedup.
    Campo sem informação é NULL (nunca "Não informado"). #}
 with source_rows as (
     select * from {{ ref('stg_vagas_com_jobs') }}
@@ -96,68 +96,48 @@ keyed as (
     from normalized
 ),
 
--- Primeira e última observação de cada grupo de dedup (conteúdo, ou o próprio
--- job do portal quando não há chave de conteúdo).
-seen as (
-    select
-        coalesce(chave_conteudo, origem || '|' || chave_portal) as dedup_key,
-        min(data_coleta) as first_seen_at,
-        max(data_coleta) as last_seen_at
-    from keyed
-    group by 1
-),
-
-latest_per_portal_id as (
+-- Cada linha recebe um grupo de dedup (chave de conteúdo, cross-portal, ou a própria
+-- chave do portal quando não há conteúdo). A linha mais recente do grupo é a canônica.
+dedup_groups as (
     select
         *,
+        coalesce(chave_conteudo, origem || '|' || chave_portal) as dedup_group_id,
+        min(data_coleta) over (
+            partition by coalesce(chave_conteudo, origem || '|' || chave_portal)
+        ) as first_seen_at,
+        max(data_coleta) over (
+            partition by coalesce(chave_conteudo, origem || '|' || chave_portal)
+        ) as last_seen_at,
         row_number() over (
-            partition by origem, chave_portal
-            order by data_coleta desc, raw_job_id desc
-        ) as portal_rank
+            partition by coalesce(chave_conteudo, origem || '|' || chave_portal)
+            order by data_coleta desc, data_publicacao desc nulls last, raw_job_id desc
+        ) as content_rank
     from keyed
-),
-
-latest as (
-    select * from latest_per_portal_id where portal_rank = 1
-),
-
-ranked as (
-    select
-        *,
-        case
-            when chave_conteudo is null then 1
-            else row_number() over (
-                partition by chave_conteudo
-                order by data_coleta desc, data_publicacao desc nulls last, raw_job_id desc
-            )
-        end as content_rank
-    from latest
 )
 
 select
-    r.raw_job_id,
-    r.origem,
-    r.link,
-    r.id_externo,
-    r.titulo,
-    r.empresa,
-    r.senioridade,
-    r.localizacao,
-    r.descricao,
-    r.salario,
-    r.modalidade,
-    r.experiencia,
-    r.escolaridade,
-    r.qtd_posicoes,
-    r.data_publicacao,
-    r.chave_conteudo,
-    r.data_coleta,
-    s.first_seen_at,
-    s.last_seen_at,
-    r.is_relevant,
-    r.descricao_truncada,
-    r.modalidade_origem
-from ranked r
-left join seen s
-    on s.dedup_key = coalesce(r.chave_conteudo, r.origem || '|' || r.chave_portal)
-where r.content_rank = 1
+    raw_job_id,
+    origem,
+    link,
+    id_externo,
+    titulo,
+    empresa,
+    senioridade,
+    localizacao,
+    descricao,
+    salario,
+    modalidade,
+    experiencia,
+    escolaridade,
+    qtd_posicoes,
+    data_publicacao,
+    chave_conteudo,
+    data_coleta,
+    dedup_group_id,
+    first_seen_at,
+    last_seen_at,
+    is_relevant,
+    descricao_truncada,
+    modalidade_origem,
+    (content_rank = 1) as is_canonical
+from dedup_groups

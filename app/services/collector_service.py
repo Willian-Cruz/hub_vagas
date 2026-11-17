@@ -26,10 +26,11 @@ class CollectorService:
             logger.info("Iniciando scraper: %s", fonte)
 
             try:
-                resultado = scraper.coletar()
+                # Retry com backoff exponencial + jitter para erros de rede
+                resultado = scraper.coletar_com_retry()
                 if not isinstance(resultado, ScrapeResult):
                     raise TypeError(
-                        f"{scraper.__name__}.coletar() deve retornar ScrapeResult, "
+                        f"{scraper.__name__}.coletar_com_retry() deve retornar ScrapeResult, "
                         f"recebido: {type(resultado).__name__}"
                     )
 

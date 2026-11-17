@@ -6,6 +6,8 @@ Responsabilidades:
     2. Grava vagas na tabela raw `jobs` (dedup por link / origem+id_externo)
     3. Registra status de cada fonte em bronze.scrape_runs para monitoramento
     4. Registra início, fim, duração e erros no log
+    5. Trava contra execução simultânea (pg_try_advisory_lock)
+    6. Notificação de falha (webhook/e-mail) quando a execução não coletar vagas
 
 Por que separar do main.py?
     O main.py se torna apenas um ponto de entrada manual.
@@ -26,17 +28,58 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 
 from utils.logger import get_logger
 from services.collector_service import CollectorService
 from repositories.bronze_repository import BronzeRepository
 from repositories.job_repository import DUPLICADA, ERRO, JobRepository, SALVA
 from scrapers.base_scraper import ScrapeStatus
+from database.connection import engine
+from notifier import enviar_falha
 
 logger = get_logger(__name__)
 
+# Chave fixa do advisory lock (inteiro de 64 bits). Apenas uma execução por vez.
+ADVISORY_LOCK_KEY = 1794880335682
+
 
 class PipelineService:
+
+    @staticmethod
+    def _adquirir_travar_execucao() -> bool:
+        """Tenta adquirir o advisory lock do PostgreSQL.
+
+        Returns True se conseguiu o lock (pode seguir), False se outra instância
+        já está executando (aborta para evitar duplicação).
+        """
+        try:
+            with engine.connect() as connection:
+                resultado = connection.execute(
+                    text("SELECT pg_try_advisory_lock(:key)"),
+                    {"key": ADVISORY_LOCK_KEY},
+                ).scalar()
+                connection.commit()
+                return bool(resultado)
+        except Exception:
+            # Se não conseguir consultar o banco, deixa seguir (não trava por cautela)
+            logger.warning(
+                "Não foi possível consultar o advisory lock; seguindo sem trava"
+            )
+            return True
+
+    @staticmethod
+    def _liberar_travar_execucao() -> None:
+        """Libera o advisory lock ao final da execução."""
+        try:
+            with engine.connect() as connection:
+                connection.execute(
+                    text("SELECT pg_advisory_unlock(:key)"),
+                    {"key": ADVISORY_LOCK_KEY},
+                )
+                connection.commit()
+        except Exception:
+            logger.warning("Não foi possível liberar o advisory lock")
 
     @staticmethod
     def executar() -> dict:
@@ -62,6 +105,29 @@ class PipelineService:
                 "sucesso":           bool,  # True se pelo menos uma fonte trouxe vagas
             }
         """
+        trave_adquirida = PipelineService._adquirir_travar_execucao()
+        if not trave_adquirida:
+            logger.warning(
+                "Outra instância do pipeline já está em execução (advisory lock). Abortando."
+            )
+            return {
+                "run_id": None,
+                "coletadas": 0,
+                "descartadas": 0,
+                "raw_salvas": 0,
+                "raw_duplicadas": 0,
+                "raw_erros": 0,
+                "bronze_ok": False,
+                "fontes": [],
+                "fontes_sucesso": 0,
+                "fontes_parcial": 0,
+                "fontes_falha": 0,
+                "fontes_vazio": 0,
+                "duracao_seg": 0.0,
+                "sucesso": False,
+                "bloqueado_por_trava": True,
+            }
+
         logger.info("=" * 60)
         logger.info("PIPELINE DE INGESTÃO INICIADO")
         logger.info("=" * 60)
@@ -81,6 +147,7 @@ class PipelineService:
             "fontes_vazio":   0,
             "duracao_seg":    0.0,
             "sucesso":        False,
+            "bloqueado_por_trava": False,
         }
 
         inicio = time.time()
@@ -196,12 +263,15 @@ class PipelineService:
                 logger.warning(
                     "Pipeline não coletou vagas de nenhuma fonte"
                 )
+                enviar_falha(metricas, erro="nenhuma fonte trouxe vagas")
 
         except Exception as e:
             logger.error(f"Erro crítico no pipeline: {e}", exc_info=True)
             metricas["sucesso"] = False
+            enviar_falha(metricas, erro=str(e))
 
         finally:
+            PipelineService._liberar_travar_execucao()
             metricas["duracao_seg"] = round(time.time() - inicio, 2)
             status = "CONCLUÍDO" if metricas["sucesso"] else "FALHOU"
             logger.info(

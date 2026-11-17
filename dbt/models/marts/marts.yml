@@ -23,11 +23,17 @@ models:
       - name: pct_com_salario
         tests: [not_null]
   - name: mart_vagas_por_dia
-    description: "Volume de observações coletadas por dia e portal."
+    description: "Volume de observações coletadas por dia e portal (lê da Silver)."
     columns:
       - name: data_coleta
         tests: [not_null]
       - name: source
+        tests: [not_null]
+      - name: observacoes
+        tests: [not_null]
+      - name: vagas_distintas
+        tests: [not_null]
+      - name: vagas_canonicas
         tests: [not_null]
   - name: mart_vagas_por_origem_localidade
     description: "Snapshot Silver de vagas por portal, localidade e senioridade."
@@ -52,3 +58,18 @@ models:
         tests:
           - accepted_values:
               values: ["success", "empty", "partial", "failed"]
+  - name: mart_qualidade_campos
+    description: "Saúde do parser por fonte, dia e campo: percentual de não-nulo."
+    columns:
+      - name: fonte
+        tests: [not_null]
+      - name: data_coleta
+        tests: [not_null]
+      - name: campo
+        tests: [not_null]
+      - name: total_vagas
+        tests: [not_null]
+      - name: vagas_nao_nulas
+        tests: [not_null]
+      - name: pct_nao_nulo
+        tests: [not_null]

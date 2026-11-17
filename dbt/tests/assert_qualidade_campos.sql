@@ -32,7 +32,7 @@ quedas as (
         h.campo,
         h.mediana_pct_7d,
         j.pct_nao_nulo as pct_hoje,
-        round(h.mediana_pct_7d - j.pct_nao_nulo, 1) as pontos_perdidos,
+        round((h.mediana_pct_7d - j.pct_nao_nulo)::numeric, 1) as pontos_perdidos,
         j.total_vagas as vagas_hoje,
         h.media_vagas_7d,
         round(100.0 * (h.media_vagas_7d - j.total_vagas)::numeric / nullif(h.media_vagas_7d, 0), 1) as pct_queda_volume

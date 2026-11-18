@@ -151,8 +151,11 @@ class AnalyticsService:
         df = cls._query(sql)
         row = df.iloc[0]
 
-        # Total de tecnologias vem da tabela de tecnologias (historical)
-        df_tech = cls._query("SELECT COUNT(*) AS total FROM technologies")
+        # Total de tecnologias vem do mart_demanda_tecnologias (Gold),
+        # extraído por regex da seed tecnologias_monitoradas.csv.
+        df_tech = cls._query(
+            "SELECT COUNT(*) AS total FROM gold.mart_demanda_tecnologias"
+        )
         total_tech = int(df_tech.iloc[0]["total"])
 
         return {

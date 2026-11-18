@@ -40,6 +40,7 @@ class VagasScraper(BaseScraper):
     NEW_RESULTS_WAIT_MS = 6_000
     MAX_NO_CHANGE = 3
     NAVIGATION_TIMEOUT_MS = 40_000
+    MAX_DETAIL_PAGES = 5
 
     USER_AGENT = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -246,6 +247,7 @@ class VagasScraper(BaseScraper):
                         else None
                     ),
                     link=link,
+                    detail_url=link,
                     origem=cls.SOURCE,
                     raw_payload={"html_fragment": str(card)},
                     id_externo=str(id_externo) if id_externo else None,
@@ -260,3 +262,64 @@ class VagasScraper(BaseScraper):
             )
 
         return vagas, cards_invalidos, len(cards)
+
+    # ── Deep scraping: Vagas.com (item 3) ─────────────────────────────────
+
+    @classmethod
+    def fetch_detail_page(cls, detail_url: str) -> str | None:
+        """Navega até a página de detalhe da vaga no Vagas.com e retorna o HTML."""
+        browser = None
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page(user_agent=cls.USER_AGENT)
+                try:
+                    page.goto(
+                        detail_url,
+                        timeout=cls.NAVIGATION_TIMEOUT_MS,
+                        wait_until="domcontentloaded",
+                    )
+                    return page.content()
+                finally:
+                    browser.close()
+        except Exception as exc:
+            cls._log(f"Falha ao buscar detalhe de {detail_url}: {exc}")
+            return None
+
+    @classmethod
+    def _merge_detail_into_vaga(
+        cls, vaga: JobSchema, detail_html: str | None
+    ) -> JobSchema:
+        """Extrai descrição completa e salário da página de detalhe do Vagas.com."""
+        if not detail_html:
+            return vaga
+
+        soup = BeautifulSoup(detail_html, "html.parser")
+
+        # Descrição completa (seletor típico do Vagas.com; calibrar se mudar)
+        descricao_el = soup.select_one(
+            ".job-description, .description, div[data-vaga-descricao], "
+            "section.vaga-descricao"
+        )
+        descricao_completa = (
+            normalizar_espacos(descricao_el.get_text(" ", strip=True))
+            if descricao_el is not None
+            else vaga.descricao
+        )
+
+        # Salário na página de detalhe (seletor típico; calibrar se mudar)
+        salario_el = soup.select_one(
+            ".salary, .salario, span[data-vaga-salario], "
+            "div.salary-info, span.vaga-salario"
+        )
+        salario_detalhado = (
+            normalizar_espacos(salario_el.get_text(" ", strip=True))
+            if salario_el is not None
+            else vaga.salario
+        )
+
+        return JobSchema(
+            **vaga.model_dump(),
+            descricao=descricao_completa,
+            salario=salario_detalhado,
+        )

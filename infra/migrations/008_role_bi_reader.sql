@@ -1,9 +1,9 @@
 -- 008: role somente leitura bi_reader para consumo (Power BI, metabase, etc.)
 --
 -- Criar a role bi_reader com login e senha definida FORA do repositório.
--- A role tem CONNECT no banco e USAGE + SELECT apenas no schema gold.
--- O dbt recria as tabelas a cada build e perde os grants, por isso
--- dbt_project.yml declara +grants: select: ['bi_reader'] para os modelos gold.
+-- A role tem CONNECT no banco e USAGE + SELECT apenas nos schemas gold e bronze.
+-- Os schemas podem não existir ainda (são criados pelo dbt), portanto usamos
+-- CREATE SCHEMA IF NOT EXISTS e DO $$ para evitar falha em banco limpo.
 
 -- Executar como o usuário que o dbt usa (dono do schema gold).
 -- Defina a senha fora do repositório (nunca commitá-la).
@@ -16,12 +16,21 @@ BEGIN
 END
 $$;
 
-GRANT USAGE ON SCHEMA gold TO bi_reader;
-GRANT SELECT ON ALL TABLES IN SCHEMA gold TO bi_reader;
-ALTER DEFAULT PRIVILEGES IN SCHEMA gold GRANT SELECT ON TABLES TO bi_reader;
+CREATE SCHEMA IF NOT EXISTS gold;
+CREATE SCHEMA IF NOT EXISTS silver;
+CREATE SCHEMA IF NOT EXISTS bronze;
 
--- Opcional: tambem concede SELECT em bronze.scrape_runs para monitoramento de
--- fontes (nao é obrigatorio, apenas leitura).
-GRANT USAGE ON SCHEMA bronze TO bi_reader;
-GRANT SELECT ON ALL TABLES IN SCHEMA bronze TO bi_reader;
-ALTER DEFAULT PRIVILEGES IN SCHEMA bronze GRANT SELECT ON TABLES TO bi_reader;
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.schemata WHERE schema_name = 'gold') THEN
+        EXECUTE 'GRANT USAGE ON SCHEMA gold TO bi_reader';
+        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA gold TO bi_reader';
+        EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA gold GRANT SELECT ON TABLES TO bi_reader';
+    END IF;
+    IF EXISTS (SELECT FROM information_schema.schemata WHERE schema_name = 'bronze') THEN
+        EXECUTE 'GRANT USAGE ON SCHEMA bronze TO bi_reader';
+        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA bronze TO bi_reader';
+        EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA bronze GRANT SELECT ON TABLES TO bi_reader';
+    END IF;
+END
+$$;

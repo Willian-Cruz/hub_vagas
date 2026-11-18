@@ -1,0 +1,4 @@
+[console_scripts]
+hub-vagas-ingest = app.main:main
+hub-vagas-scheduler = app.scheduler:main
+hub-vagas-transform = app.transform:main

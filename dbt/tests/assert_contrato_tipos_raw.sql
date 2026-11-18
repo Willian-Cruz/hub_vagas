@@ -20,6 +20,7 @@ with esperado as (
         ('source', 'text'),
         ('source_job_id', 'text'),
         ('collected_at', 'timestamp with time zone'),
+        ('link', 'text'),
         ('ingested_at', 'timestamp with time zone'),
         ('scraper_version', 'text'),
         ('payload_hash', 'text'),

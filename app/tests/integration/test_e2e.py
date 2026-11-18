@@ -15,6 +15,7 @@ Execução (CI com services: postgres):
     pytest app/tests/integration/test_e2e.py -m integration -v
 """
 import json
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -23,6 +24,7 @@ from sqlalchemy import text
 from repositories.job_repository import (
     JobRepository,
     DUPLICADA,
+    ERRO,
     SALVA,
     _payload_hash,
     _raw_payload_de_vaga,
@@ -41,18 +43,19 @@ def _inserir_raw(conexao, run_id, vaga_dict):
             """
             INSERT INTO raw.job_observations
                 (run_id, source, source_job_id, collected_at, ingested_at,
-                 scraper_version, payload_hash, raw_payload, is_relevant)
+                 link, scraper_version, payload_hash, raw_payload, is_relevant)
             VALUES
                 (:run_id, :source, :source_job_id, :collected_at, :ingested_at,
-                 :scraper_version, :payload_hash, CAST(:raw_payload AS jsonb), :is_relevant)
+                 :link, :scraper_version, :payload_hash, CAST(:raw_payload AS jsonb), :is_relevant)
             """
         ),
         {
             "run_id": run_id,
             "source": vaga_dict.get("origem", "Vagas.com"),
             "source_job_id": vaga_dict.get("id_externo"),
-            "collected_at": vaga_dict.get("data_coleta"),
-            "ingested_at": vaga_dict.get("ingested_at"),
+            "collected_at": vaga_dict.get("collected_at"),
+            "ingested_at": vaga_dict.get("ingested_at", vaga_dict.get("collected_at")),
+            "link": vaga_dict.get("link"),
             "scraper_version": vaga_dict.get("scraper_version", "1.0.0"),
             "payload_hash": payload_hash,
             "raw_payload": json.dumps(payload),
@@ -78,23 +81,23 @@ class TestCenarioASucesso:
             "link": "https://example.com/vaga/e2e-a",
             "origem": "Vagas.com",
             "id_externo": "e2e-a-001",
-            "data_publicacao": "2026-11-17 10:00:00+00",
+            "data_publicacao": "2026-11-17T10:00:00+00:00",
             "modalidade": "Híbrido",
             "is_relevant": True,
+            "collected_at": "2026-11-17T10:00:00+00:00",
         }
 
         _inserir_raw(conexao, run_id, vaga)
 
         # Verifica que está na raw com campos de linhagem
-        with conexao.connect() as conn:
-            row = conn.execute(
-                text(
-                    "SELECT is_relevant, scraper_version, ingested_at, "
-                    "run_id, source, payload_hash "
-                    "FROM raw.job_observations WHERE link = :link"
-                ),
-                {"link": vaga["link"]},
-            ).fetchone()
+        row = conexao.execute(
+            text(
+                "SELECT is_relevant, scraper_version, ingested_at, "
+                "run_id, source, payload_hash, link "
+                "FROM raw.job_observations WHERE link = :link"
+            ),
+            {"link": vaga["link"]},
+        ).fetchone()
 
         assert row is not None
         assert row.is_relevant is True
@@ -103,6 +106,7 @@ class TestCenarioASucesso:
         assert row.run_id == run_id
         assert row.source == "Vagas.com"
         assert row.payload_hash is not None
+        assert row.link == vaga["link"]
 
 
 @pytest.mark.integration
@@ -123,21 +127,22 @@ class TestCenarioBDadosIncompletos:
             "origem": "InfoJobs",
             "id_externo": "e2e-b-001",
             "is_relevant": True,
+            "collected_at": "2026-11-17T10:00:00+00:00",
         }
 
         _inserir_raw(conexao, run_id, vaga)
 
-        with conexao.connect() as conn:
-            row = conn.execute(
-                text(
-                    "SELECT raw_payload, is_relevant "
-                    "FROM raw.job_observations WHERE link = :link"
-                ),
-                {"link": vaga["link"]},
-            ).fetchone()
+        row = conexao.execute(
+            text(
+                "SELECT raw_payload, is_relevant, link "
+                "FROM raw.job_observations WHERE link = :link"
+            ),
+            {"link": vaga["link"]},
+        ).fetchone()
 
         assert row is not None
         assert row.is_relevant is True
+        assert row.link == vaga["link"]
         # raw_payload preserva o que veio (campos ausentes não aparecem ou são None)
         payload = row.raw_payload
         if isinstance(payload, str):
@@ -169,11 +174,10 @@ class TestCenarioCDuplicidade:
         assert r2 == DUPLICADA
 
         # Apenas 1 linha na raw
-        with conexao.connect() as conn:
-            count = conn.execute(
-                text("SELECT count(*) FROM raw.job_observations WHERE link = :link"),
-                {"link": "https://example.com/vaga/e2e-c"},
-            ).scalar()
+        count = conexao.execute(
+            text("SELECT count(*) FROM raw.job_observations WHERE link = :link"),
+            {"link": "https://example.com/vaga/e2e-c"},
+        ).scalar()
         assert count == 1
 
 
@@ -191,21 +195,21 @@ class TestCenarioDFonteIndisponivel:
             "link": "https://example.com/vaga/e2e-d-ok",
             "origem": "Vagas.com",
             "is_relevant": True,
+            "collected_at": "2026-11-17T10:00:00+00:00",
         }
         _inserir_raw(conexao, run_id, vaga_ok)
 
         # Verifica que a fonte com sucesso tem dados e a outra não
-        with conexao.connect() as conn:
-            count_ok = conn.execute(
-                text(
-                    "SELECT count(*) FROM raw.job_observations WHERE origem = 'Vagas.com'"
-                )
-            ).scalar()
-            count_infojobs = conn.execute(
-                text(
-                    "SELECT count(*) FROM raw.job_observations WHERE origem = 'InfoJobs'"
-                )
-            ).scalar()
+        count_ok = conexao.execute(
+            text(
+                "SELECT count(*) FROM raw.job_observations WHERE source = 'Vagas.com'"
+            )
+        ).scalar()
+        count_infojobs = conexao.execute(
+            text(
+                "SELECT count(*) FROM raw.job_observations WHERE source = 'InfoJobs'"
+            )
+        ).scalar()
 
         assert count_ok >= 1
         assert count_infojobs == 0
@@ -217,32 +221,45 @@ class TestCenarioEBancoIndisponivel:
 
     def test_persistencia_falha_retorna_erro(self):
         """
-        Se o banco estiver indisponível, JobRepository.salvar retorna ERRO.
-        Coberto em nível de unidade (test_job_repository.py).
-        Aqui apenas documenta o comportamento esperado.
+        Se a sessão de banco falhar, JobRepository.salvar retorna ERRO e faz rollback.
+        Simula falha de conexão via mock do SessionLocal.
         """
-        # Não é possível simular banco indisponível com banco real conectado.
-        # O teste de unidade cobre este cenário.
-        assert True
+        vaga = JobSchema(
+            titulo="Vaga teste banco indisponível",
+            link="https://example.com/vaga/e2e-e",
+            origem="Vagas.com",
+            id_externo="e2e-e-001",
+        )
+
+        with patch(
+            "repositories.job_repository.SessionLocal"
+        ) as mock_session_local:
+            mock_session = mock_session_local.return_value
+            mock_session.execute.side_effect = Exception("conexão perdida")
+
+            resultado = JobRepository.salvar(vaga, run_id=uuid4())
+
+        assert resultado == ERRO
 
 
 @pytest.mark.integration
 class TestCenarioFFalhaTransformacao:
     """Cenário F — Falha de transformação dbt."""
 
-    def test_views_staging_consultaveis(self, conexao):
-        """As views de staging da Silver existem e são consultáveis."""
-        with conexao.connect() as conn:
-            result = conn.execute(
-                text(
-                    "SELECT table_name FROM information_schema.views "
-                    "WHERE table_schema = 'silver'"
-                )
-            ).fetchall()
-        nomes = [r[0] for r in result]
-        assert "stg_vagas_com_jobs" in nomes
-        assert "stg_infojobs_jobs" in nomes
-        assert "stg_catho_jobs" in nomes
+    def test_dbt_build_falha_retorna_codigo_nao_zero(self):
+        """
+        Simula falha de dbt build verificando que o transform.py retorna
+        código de saída diferente de zero quando o dbt falha.
+        """
+        from run_dbt import main as executar_dbt
+
+        # Mock do subprocess para simular falha do dbt
+        with patch("run_dbt.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 1
+
+            codigo = executar_dbt(["build"])
+
+        assert codigo != 0
 
 
 @pytest.mark.integration
@@ -257,14 +274,14 @@ class TestCenarioGAlteracaoFonte:
             "link": "https://example.com/vaga/e2e-g",
             "origem": "Vagas.com",
             "is_relevant": True,
+            "collected_at": "2026-11-17T10:00:00+00:00",
             # sem empresa, salario, descricao - campos ausentes
         }
 
         _inserir_raw(conexao, run_id, vaga)
 
-        with conexao.connect() as conn:
-            count = conn.execute(
-                text("SELECT count(*) FROM raw.job_observations WHERE link = :link"),
-                {"link": vaga["link"]},
-            ).scalar()
+        count = conexao.execute(
+            text("SELECT count(*) FROM raw.job_observations WHERE link = :link"),
+            {"link": vaga["link"]},
+        ).scalar()
         assert count == 1

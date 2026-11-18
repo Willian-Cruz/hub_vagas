@@ -15,7 +15,17 @@ import sys
 from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+
+# ── Restaurar database.connection real (o conftest raiz o mocka globalmente) ──
+# Os testes de integração precisam do SQLAlchemy real conectado ao PostgreSQL.
+if "database.connection" in sys.modules:
+    del sys.modules["database.connection"]
+from database.connection import engine as _real_engine  # noqa: F401  (garante import real)
+
+# Carrega variáveis de ambiente do .env se existir
+load_dotenv()
 
 # Adiciona raiz do projeto ao path para imports de infra/
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
@@ -40,7 +50,7 @@ def engine():
 def aplicar_migrations(engine):
     """Aplica todas as migrations SQL antes dos testes de integração."""
     sql_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
-    with eng.connect() as conn:
+    with engine.connect() as conn:
         for sql_file in sql_files:
             sql = sql_file.read_text(encoding="utf-8")
             conn.execute(text(sql))
@@ -50,18 +60,15 @@ def aplicar_migrations(engine):
 
 @pytest.fixture
 def clean_tables(engine):
-    """Limpa as tabelas de dados entre testes para isolamento."""
+    """Limpa as tabelas de dados entre testes para isolamento.
+
+    Apenas tabelas criadas pelas migrations SQL (raw e bronze) sao limpas.
+    Tabelas de silver e gold sao criadas pelo dbt e nao existem apos apenas
+    migrations, portanto nao devem ser alvo de limpeza aqui.
+    """
     yield
     with engine.begin() as conn:
         # Ordem respeitando FKs
-        conn.execute(text("DELETE FROM gold.mart_vagas"))
-        conn.execute(text("DELETE FROM gold.mart_salarios"))
-        conn.execute(text("DELETE FROM gold.mart_demanda_tecnologias"))
-        conn.execute(text("DELETE FROM gold.mart_status_fontes"))
-        conn.execute(text("DELETE FROM gold.mart_qualidade_campos"))
-        conn.execute(text("DELETE FROM gold.mart_vagas_por_dia"))
-        conn.execute(text("DELETE FROM gold.mart_vagas_por_origem_localidade"))
-        conn.execute(text("DELETE FROM silver.jobs"))
         conn.execute(text("DELETE FROM raw.job_observations"))
         conn.execute(text("DELETE FROM bronze.scrape_runs"))
         conn.commit()
@@ -70,5 +77,6 @@ def clean_tables(engine):
 @pytest.fixture
 def conexao(engine, clean_tables):
     """Retorna uma conexão aberta com o banco de teste."""
-    with engine.connect() as conn:
-        yield conn
+    conn = engine.connect()
+    yield conn
+    conn.close()

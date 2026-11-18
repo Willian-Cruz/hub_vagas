@@ -1,11 +1,11 @@
 {{
   config(
-    severity = 'warn',
+    severity = 'error',
     meta = {
       'documentacao': 'Avalia precisão e recall da classificação de tecnologias '
-                      'usando um conjunto rotulado manualmente. Não define meta '
-                      'de precisão (baseline deve ser estabelecida primeiro); '
-                      'apenas mede e reporta falsos positivos e falsos negativos.'
+                      'usando um conjunto rotulado manualmente. Retorna apenas '
+                      'violações reais (falsos positivos e falsos negativos). '
+                      'Se não houver violações, o teste passa sem retornar linhas.'
     }
   )
 }}
@@ -19,7 +19,7 @@ with exemplos as (
 tecnologias as (
     select tecnologia from {{ ref('tecnologias_monitoradas') }}
 ),
--- Aplica o mesmo regex usado nos marts: word boundary, case-insensitive.
+-- Aplica o mesmo regex usado nos marts: word boundary, case-insensitive (\m ... \M).
 classificacao as (
     select
         e.texto,
@@ -27,7 +27,7 @@ classificacao as (
         e.deve_cascar,
         t.tecnologia as tecnologia_teste,
         case
-            when e.texto ~* ('\m' || t.tecnologia || '\M')
+            when e.texto ~* ('\m' || regexp_replace(t.tecnologia, '([.*+?^${}()|[\]\\])', '\\\1', 'g') || '\M')
             then true
             else false
         end as casou
@@ -45,25 +45,44 @@ resultado as (
     from classificacao
     group by texto, tecnologia_esperada, deve_cascar
 ),
-metricas as (
+-- Violações reais: falsos negativos (deve cascar mas não casou)
+-- e falsos positivos (não deve cascar mas casou).
+violacoes as (
     select
-        count(*) filter (where deve_cascar = 'sim' and esperado_casou) as verdadeiros_positivos,
-        count(*) filter (where deve_cascar = 'sim' and not esperado_casou) as falsos_negativos,
-        count(*) filter (where deve_cascar = 'não' and falso_positivo_qualquer) as falsos_positivos,
-        count(*) filter (where deve_cascar = 'não' and not falso_positivo_qualquer) as verdadeiros_negativos
-    from resultado
+        texto,
+        tecnologia_esperada,
+        deve_cascar,
+        caso
+    from (
+        select
+            texto,
+            tecnologia_esperada,
+            deve_cascar,
+            'falso_negativo' as caso
+        from resultado
+        where deve_cascar = 'sim'
+          and not esperado_casou
+        union all
+        select
+            texto,
+            tecnologia_esperada,
+            deve_cascar,
+            'falso_positivo' as caso
+        from resultado
+        where deve_cascar = 'não'
+          and falso_positivo_qualquer
+    ) v
 )
 select
-    verdadeiros_positivos,
-    falsos_negativos,
-    falsos_positivos,
-    verdadeiros_negativos,
-    round(
-        100.0 * verdadeiros_positivos::numeric / nullif(verdadeiros_positivos + falsos_negativos, 0),
-        1
-    ) as recall_percent,
-    round(
-        100.0 * verdadeiros_positivos::numeric / nullif(verdadeiros_positivos + falsos_positivos, 0),
-        1
-    ) as precisao_percent
-from metricas
+    texto,
+    tecnologia_esperada,
+    deve_cascar,
+    tipo_violacao
+from (
+    select
+        texto,
+        tecnologia_esperada,
+        deve_cascar,
+        caso as tipo_violacao
+    from violacoes
+) v

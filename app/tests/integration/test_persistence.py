@@ -22,7 +22,6 @@ from repositories.job_repository import (
     JobRepository,
     DUPLICADA,
     ERRO,
-    JobRepository,
     REVISADA,
     SALVA,
 )
@@ -61,15 +60,14 @@ def test_insercao_observacao_persiste_campos_obrigatorios(conexao):
     assert resultado == SALVA
 
     # Verifica que a linha foi inserida
-    with conexao.connect() as conn:
-        row = conn.execute(
-            text(
-                "SELECT id, run_id, source, source_job_id, collected_at, "
-                "payload_hash, raw_payload, is_relevant, ingested_at, scraper_version "
-                "FROM raw.job_observations WHERE link = :link",
-                {"link": vaga.link},
-            )
-        ).fetchone()
+    row = conexao.execute(
+        text(
+            "SELECT id, run_id, source, source_job_id, collected_at, "
+            "payload_hash, raw_payload, is_relevant, ingested_at, scraper_version "
+            "FROM raw.job_observations WHERE link = :link"
+        ),
+        {"link": vaga.link},
+    ).fetchone()
 
     assert row is not None
     assert row.run_id == run_id
@@ -95,15 +93,14 @@ def test_payload_original_preservado_jsonb(conexao):
 
     JobRepository.salvar(vaga, run_id=run_id)
 
-    with conexao.connect() as conn:
-        row = conn.execute(
-            text(
-                "SELECT raw_payload->>'html_fragment' as html, "
-                "raw_payload->>'seletor_usado' as seletor "
-                "FROM raw.job_observations WHERE link = :link",
-                {"link": vaga.link},
-            )
-        ).fetchone()
+    row = conexao.execute(
+        text(
+            "SELECT raw_payload->'_raw_payload_scraper'->>'html_fragment' as html, "
+            "raw_payload->'_raw_payload_scraper'->>'seletor_usado' as seletor "
+            "FROM raw.job_observations WHERE link = :link"
+        ),
+        {"link": vaga.link},
+    ).fetchone()
 
     assert row.html == "<li class='vaga'><a href='/vaga/1'>Título</a></li>"
     assert row.seletor == "li.vaga"
@@ -122,11 +119,10 @@ def test_dedup_mesmo_hash_duplicada(conexao):
     assert r2 == DUPLICADA
 
     # Deve haver apenas 1 linha
-    with conexao.connect() as conn:
-        count = conn.execute(
-            text("SELECT count(*) FROM raw.job_observations WHERE link = :link"),
-            {"link": vaga.link},
-        ).scalar()
+    count = conexao.execute(
+        text("SELECT count(*) FROM raw.job_observations WHERE link = :link"),
+        {"link": vaga.link},
+    ).scalar()
     assert count == 1
 
 
@@ -145,11 +141,10 @@ def test_dedup_hash_diferente_revisada(conexao):
     assert r2 == REVISADA
 
     # Deve haver 2 linhas (uma para cada observação)
-    with conexao.connect() as conn:
-        count = conn.execute(
-            text("SELECT count(*) FROM raw.job_observations WHERE link = :link"),
-            {"link": vaga.link},
-        ).scalar()
+    count = conexao.execute(
+        text("SELECT count(*) FROM raw.job_observations WHERE link = :link"),
+        {"link": vaga.link},
+    ).scalar()
     assert count == 2
 
 
@@ -166,15 +161,17 @@ def test_campos_ausentes_viram_none(conexao):
 
     JobRepository.salvar(vaga, run_id=run_id)
 
-    with conexao.connect() as conn:
-        row = conn.execute(
-            text(
-                "SELECT empresa, senioridade, localizacao, salario "
-                "FROM raw.job_observations WHERE link = :link",
-                {"link": vaga.link},
-            )
-        ).fetchone()
+    row = conexao.execute(
+        text(
+            "SELECT raw_payload->>'empresa' as empresa, "
+            "raw_payload->>'senioridade' as senioridade, "
+            "raw_payload->>'localizacao' as localizacao, "
+            "raw_payload->>'salario' as salario "
+            "FROM raw.job_observations WHERE link = :link"
+        ),
+        {"link": vaga.link},
+    ).fetchone()
 
-    # raw_payload armazena os campos brutos; a coluna de metadata não tem esses campos
+    # raw_payload armazena os campos brutos; campos ausentes são NULL no JSONB
     # Verificamos que o raw_payload foi gravado sem campos ausentes
     assert row is not None

@@ -30,7 +30,7 @@ from uuid import uuid4
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 
-from utils.logger import get_logger
+from utils.logger import get_logger, log_event
 from services.collector_service import CollectorService
 from repositories.bronze_repository import BronzeRepository
 from repositories.job_repository import DUPLICADA, ERRO, JobRepository, REVISADA, SALVA
@@ -70,15 +70,22 @@ class PipelineService:
                 connection.close()
                 return None, False
         except Exception:
-            # Se nao conseguir consultar o banco, fecha a conexao e segue sem trava
+            # Fail-closed: nao conseguir consultar o banco significa que nao
+            # podemos garantir exclusao mutua. Abortar a execucao.
             try:
                 connection.close()
             except Exception:
                 pass
-            logger.warning(
-                "Nao foi possível consultar o advisory lock; seguindo sem trava"
+            log_event(
+                logger=logger,
+                level="ERROR",
+                component="pipeline",
+                stage="advisory_lock",
+                event="lock_falha",
+                status="falha",
+                mensagem="Nao foi possível consultar o advisory lock; abortando execucao (fail-closed)",
             )
-            return None, True
+            return None, False
 
     @staticmethod
     def _liberar_travar_execucao(connection) -> None:
@@ -92,7 +99,15 @@ class PipelineService:
             )
             connection.commit()
         except Exception:
-            logger.warning("Não foi possível liberar o advisory lock")
+            log_event(
+                logger=logger,
+                level="WARNING",
+                component="pipeline",
+                stage="advisory_lock",
+                event="lock_liberacao_falha",
+                status="falha",
+                mensagem="Não foi possível liberar o advisory lock",
+            )
         finally:
             try:
                 connection.close()
@@ -125,8 +140,14 @@ class PipelineService:
         """
         trave_conexao, trave_adquirida = PipelineService._adquirir_travar_execucao()
         if not trave_adquirida:
-            logger.warning(
-                "Outra instância do pipeline já está em execução (advisory lock). Abortando."
+            log_event(
+                logger=logger,
+                level="WARNING",
+                component="pipeline",
+                stage="advisory_lock",
+                event="pipeline_bloqueado",
+                status="bloqueado",
+                mensagem="Outra instância do pipeline já está em execução (advisory lock). Abortando.",
             )
             return {
                 "run_id": None,
@@ -177,9 +198,29 @@ class PipelineService:
         run_id = uuid4()
         metricas["run_id"] = str(run_id)
 
+        log_event(
+            logger=logger,
+            level="INFO",
+            run_id=str(run_id),
+            component="pipeline",
+            stage="inicio",
+            event="pipeline_iniciado",
+            status="iniciado",
+            mensagem="PIPELINE DE INGESTÃO INICIADO",
+        )
+
         try:
             # ── 1. Coleta ──────────────────────────────────────────────
-            logger.info("Etapa 1/3: Coletando vagas...")
+            log_event(
+                logger=logger,
+                level="INFO",
+                run_id=str(run_id),
+                component="pipeline",
+                stage="coleta",
+                event="etapa_iniciada",
+                status="iniciado",
+                mensagem="Etapa 1/3: Coletando vagas...",
+            )
             resultados = CollectorService.coletar_resultados()
             metricas["fontes"] = [
                 {
@@ -195,9 +236,17 @@ class PipelineService:
             vagas = [vaga for resultado in resultados for vaga in resultado.jobs]
             metricas["coletadas"] = len(vagas)
             metricas["descartadas"] = sum(resultado.discarded for resultado in resultados)
-            logger.info(
-                f"Coletadas: {len(vagas)} vagas | "
-                f"Descartadas (fora do tema): {metricas['descartadas']}"
+            log_event(
+                logger=logger,
+                level="INFO",
+                run_id=str(run_id),
+                component="pipeline",
+                stage="coleta",
+                event="vagas_coletadas",
+                status="sucesso",
+                records_received=len(vagas),
+                records_rejected=metricas["descartadas"],
+                mensagem=f"Coletadas: {len(vagas)} vagas | Descartadas (fora do tema): {metricas['descartadas']}",
             )
 
             fontes_sucesso = []
@@ -205,13 +254,30 @@ class PipelineService:
             fontes_falha = []
             fontes_vazio = []
             for resultado in resultados:
-                logger.info(
-                    f"Fonte {resultado.source}: {resultado.status.value} | "
-                    f"Vagas: {len(resultado.jobs)} | "
-                    f"Páginas: {resultado.pages_processed}"
+                log_event(
+                    logger=logger,
+                    level="INFO",
+                    run_id=str(run_id),
+                    component="scraper",
+                    source=resultado.source,
+                    stage="coleta",
+                    event="fonte_resultado",
+                    status=resultado.status.value,
+                    records_received=len(resultado.jobs),
+                    mensagem=f"Fonte {resultado.source}: {resultado.status.value} | Vagas: {len(resultado.jobs)} | Páginas: {resultado.pages_processed}",
                 )
                 if resultado.error:
-                    logger.warning(f"Fonte {resultado.source}: {resultado.error}")
+                    log_event(
+                        logger=logger,
+                        level="WARNING",
+                        run_id=str(run_id),
+                        component="scraper",
+                        source=resultado.source,
+                        stage="coleta",
+                        event="fonte_erro",
+                        status="erro",
+                        error_message=resultado.error,
+                    )
 
                 if resultado.status == ScrapeStatus.SUCCESS:
                     fontes_sucesso.append(resultado)
@@ -228,7 +294,16 @@ class PipelineService:
             metricas["fontes_vazio"] = len(fontes_vazio)
 
             # ── 2. Raw layer: salvar na tabela `jobs` ────────────────────
-            logger.info("Etapa 2/3: Gravando vagas na raw layer `jobs`...")
+            log_event(
+                logger=logger,
+                level="INFO",
+                run_id=str(run_id),
+                component="pipeline",
+                stage="persistencia",
+                event="etapa_iniciada",
+                status="iniciado",
+                mensagem="Etapa 2/3: Gravando vagas na raw layer `jobs`...",
+            )
             try:
                 for vaga in vagas:
                     resultado_salvamento = JobRepository.salvar(
@@ -242,18 +317,43 @@ class PipelineService:
                         metricas["raw_duplicadas"] += 1
                     else:
                         metricas["raw_erros"] += 1
-                logger.info(
-                    "Raw concluída — %d novas, %d revistas, %d duplicadas, %d erros",
-                    metricas["raw_novas"],
-                    metricas["raw_revisadas"],
-                    metricas["raw_duplicadas"],
-                    metricas["raw_erros"],
+                log_event(
+                    logger=logger,
+                    level="INFO",
+                    run_id=str(run_id),
+                    component="repository",
+                    stage="persistencia",
+                    event="raw_concluida",
+                    status="sucesso",
+                    records_received=metricas["raw_novas"],
+                    records_persisted=metricas["raw_novas"],
+                    records_duplicated=metricas["raw_duplicadas"],
+                    records_rejected=metricas["raw_erros"],
+                    mensagem=f"Raw concluída — {metricas['raw_novas']} novas, {metricas['raw_revisadas']} revistas, {metricas['raw_duplicadas']} duplicadas, {metricas['raw_erros']} erros",
                 )
             except Exception:
-                logger.exception("Falha ao persistir na raw layer `jobs`")
+                log_event(
+                    logger=logger,
+                    level="ERROR",
+                    run_id=str(run_id),
+                    component="repository",
+                    stage="persistencia",
+                    event="raw_falha",
+                    status="falha",
+                    mensagem="Falha ao persistir na raw layer `jobs`",
+                )
 
             # ── 3. Bronze: registro de execução por fonte ────────────────
-            logger.info("Etapa 3/3: Gravando status de execução no Bronze...")
+            log_event(
+                logger=logger,
+                level="INFO",
+                run_id=str(run_id),
+                component="pipeline",
+                stage="bronze",
+                event="etapa_iniciada",
+                status="iniciado",
+                mensagem="Etapa 3/3: Gravando status de execução no Bronze...",
+            )
             bronze_ok = False
             try:
                 metricas_bronze = BronzeRepository.persistir_resultados(
@@ -264,22 +364,49 @@ class PipelineService:
                 )
                 bronze_ok = True
                 metricas["bronze_ok"] = True
-                logger.info(
-                    "Bronze concluída — %d scrape_run(s) registrado(s)",
-                    metricas_bronze,
+                log_event(
+                    logger=logger,
+                    level="INFO",
+                    run_id=str(run_id),
+                    component="repository",
+                    stage="bronze",
+                    event="bronze_concluida",
+                    status="sucesso",
+                    records_persisted=metricas_bronze,
+                    mensagem=f"Bronze concluída — {metricas_bronze} scrape_run(s) registrado(s)",
                 )
             except Exception:
-                logger.exception("Falha ao persistir status no Bronze")
+                log_event(
+                    logger=logger,
+                    level="ERROR",
+                    run_id=str(run_id),
+                    component="repository",
+                    stage="bronze",
+                    event="bronze_falha",
+                    status="falha",
+                    mensagem="Falha ao persistir status no Bronze",
+                )
 
             # Sucesso parcial ou total = Bronze gravado e pelo menos uma fonte
-            # retornou dados (SUCESSO ou PARTIAL com vagas)
+            # retornou dados (SUCESSO ou PARTIAL com vagas).
+            # Erros de persistência na raw impedem status SUCESSO integral.
             fontes_com_vagas = fontes_sucesso + [f for f in fontes_parcial if f.jobs]
             tem_dados = len(fontes_com_vagas) > 0
             todas_sucesso = len(fontes_sucesso) == len(resultados) and len(resultados) > 0
+            tem_erros_persistencia = metricas["raw_erros"] > 0
+            persistiu_alguma = metricas["raw_novas"] > 0 or metricas["raw_revisadas"] > 0
 
-            if bronze_ok and tem_dados:
+            if tem_erros_persistencia and not persistiu_alguma:
+                # Erro de persistência em todas as vagas: falha total
+                metricas["sucesso"] = False
+                metricas["status"] = "FALHADO"
+            elif tem_erros_persistencia and persistiu_alguma:
+                # Algumas vagas persistidas, outras falharam: parcial
+                metricas["sucesso"] = False
+                metricas["status"] = "PARTIAL"
+            elif bronze_ok and tem_dados:
                 metricas["sucesso"] = True
-                metricas["status"] = "SUCESSO" if todas_sucesso else "PARCIAL"
+                metricas["status"] = "SUCESSO" if todas_sucesso else "PARTIAL"
             elif bronze_ok and not tem_dados:
                 # Bronze funcionou, mas nenhuma fonte trouxe dados
                 metricas["sucesso"] = False
@@ -290,37 +417,83 @@ class PipelineService:
                 metricas["status"] = "FALHADO"
 
             if metricas["fontes_falha"] > 0:
-                logger.warning(
-                    f"Pipeline concluído com {metricas['fontes_falha']} fonte(s) em falha"
+                log_event(
+                    logger=logger,
+                    level="WARNING",
+                    run_id=str(run_id),
+                    component="pipeline",
+                    stage="finalizacao",
+                    event="fontes_falha",
+                    status="aviso",
+                    records_rejected=metricas["fontes_falha"],
+                    mensagem=f"Pipeline concluído com {metricas['fontes_falha']} fonte(s) em falha",
                 )
             if metricas["fontes_parcial"] > 0:
-                logger.info(
-                    f"Pipeline concluído com {metricas['fontes_parcial']} fonte(s) parcial(is)"
+                log_event(
+                    logger=logger,
+                    level="INFO",
+                    run_id=str(run_id),
+                    component="pipeline",
+                    stage="finalizacao",
+                    event="fontes_parcial",
+                    status="aviso",
+                    mensagem=f"Pipeline concluído com {metricas['fontes_parcial']} fonte(s) parcial(is)",
                 )
             if not metricas["sucesso"]:
-                logger.warning(
-                    "Pipeline não coletou vagas de nenhuma fonte"
+                log_event(
+                    logger=logger,
+                    level="WARNING",
+                    run_id=str(run_id),
+                    component="pipeline",
+                    stage="finalizacao",
+                    event="pipeline_sem_sucesso",
+                    status="falha",
+                    mensagem="Pipeline não coletou vagas de nenhuma fonte",
                 )
                 enviar_falha(metricas, erro="nenhuma fonte trouxe vagas")
 
         except Exception as e:
-            logger.error(f"Erro crítico no pipeline: {e}", exc_info=True)
+            log_event(
+                logger=logger,
+                level="ERROR",
+                run_id=str(run_id),
+                component="pipeline",
+                stage="finalizacao",
+                event="erro_critico",
+                status="falha",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                mensagem=f"Erro crítico no pipeline: {e}",
+            )
             metricas["sucesso"] = False
             enviar_falha(metricas, erro=str(e))
 
         finally:
             PipelineService._liberar_travar_execucao(trave_conexao)
             metricas["duracao_seg"] = round(time.time() - inicio, 2)
-            status = "SUCESSO" if metricas["sucesso"] else "FALHADO"
-            logger.info(
-                f"PIPELINE {status} em {metricas['duracao_seg']}s | "
-                f"Coletadas: {metricas['coletadas']} | "
-                f"Descartadas: {metricas['descartadas']} | "
-                f"Raw: {metricas['raw_novas']} novas / "
-                f"{metricas['raw_revisadas']} revistas / "
-                f"{metricas['raw_duplicadas']} dup / {metricas['raw_erros']} err | "
-                f"Fontes: {metricas['fontes_sucesso']} ok, {metricas['fontes_parcial']} parcial, {metricas['fontes_falha']} falha, {metricas['fontes_vazio']} vazio"
+            status_final = "SUCESSO" if metricas["sucesso"] else "FALHADO"
+            log_event(
+                logger=logger,
+                level="INFO",
+                run_id=str(run_id),
+                component="pipeline",
+                stage="finalizacao",
+                event="pipeline_finalizado",
+                status=status_final.lower(),
+                duration_ms=round(metricas["duracao_seg"] * 1000, 2),
+                records_received=metricas["coletadas"],
+                records_persisted=metricas["raw_novas"],
+                records_duplicated=metricas["raw_duplicadas"],
+                records_rejected=metricas["raw_erros"],
+                mensagem=(
+                    f"PIPELINE {status_final} em {metricas['duracao_seg']}s | "
+                    f"Coletadas: {metricas['coletadas']} | "
+                    f"Descartadas: {metricas['descartadas']} | "
+                    f"Raw: {metricas['raw_novas']} novas / "
+                    f"{metricas['raw_revisadas']} revistas / "
+                    f"{metricas['raw_duplicadas']} dup / {metricas['raw_erros']} err | "
+                    f"Fontes: {metricas['fontes_sucesso']} ok, {metricas['fontes_parcial']} parcial, {metricas['fontes_falha']} falha, {metricas['fontes_vazio']} vazio"
+                ),
             )
-            logger.info("=" * 60)
 
         return metricas

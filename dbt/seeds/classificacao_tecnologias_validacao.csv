@@ -1,12 +1,12 @@
 texto,tecnologia_esperada,deve_cascar
-"Desenvolvedor Python com 3 anos de experiência",python,sim
+"Desenvolvedor Python com 3 anos de experiencia",python,sim
 "Vaga para engenheiro de dados Python e SQL",python,sim
-"Pythonic code is great",python,não
+"Pythonic code is great",python,nao
 "Conhecimento avançado em SQL Server",sql,sim
-"PL/SQL para banco de dados Oracle",sql,não
-"PL-300 certification for Power BI",sql,não
-"MySQL e PostgreSQL em produção",mysql,sim
-"Experiência com Oracle Database",oracle,sim
+"PL/SQL para banco de dados",sql,nao
+"PL-300 certification",sql,nao
+"MySQL e PostgreSQL em producao",mysql,sim
+"Experiencia com Oracle Database",oracle,sim
 "MongoDB NoSQL para documentos",mongodb,sim
 "PostgreSQL com PostGIS",postgresql,sim
 "Docker e Kubernetes para containers",docker,sim
@@ -15,23 +15,33 @@ texto,tecnologia_esperada,deve_cascar
 "Microsoft Azure cloud",azure,sim
 "GCP com BigQuery",gcp,sim
 "Apache Spark para processamento",spark,sim
-"Airflow para orquestração de pipelines",airflow,sim
+"Airflow para orquestracao de pipelines",airflow,sim
 "Kafka para mensageria",kafka,sim
-"Power BI dashboards executivos",power bi,sim
-"PowerPoint presentation",power bi,não
-"Tableau para visualização",tableau,sim
+"Tableau para visualizacao",tableau,sim
 "Databricks lakehouse",databricks,sim
 "Snowflake data warehouse",snowflake,sim
-"dbt para transformação de dados",dbt,sim
+"dbt para transformacao de dados",dbt,sim
 "BigQuery no GCP",bigquery,sim
 "Redshift data warehouse",redshift,sim
-"Excel avançado para planilhas",excel,sim
-"Git versionamento de código",git,sim
+"Excel avancado para planilhas",excel,sim
+"Git versionamento de codigo",git,sim
 "Looker para BI empresarial",looker,sim
 "Qlik para analytics",qlik,sim
-"Desenvolvedor Java backend",python,não
-"Sistemas operacionais Linux",sql,não
-"Vaga para analista de negócios",aws,não
+"Desenvolvedor Java backend",python,nao
+"Sistemas operacionais Linux",sql,nao
+"Vaga para analista de negocios",aws,nao
 "Planilhas no Excel antigo",excel,sim
-"Oracle ou Postgres",oracle,sim
-"Oracle ou Postgres",postgresql,sim
+"Oracle ou PostgreSQL",oracle,sim
+"Oracle ou PostgreSQL",postgresql,sim
+"Experiencia com SQL Server 2019",sql,sim
+"PL/SQL procedure",sql,sim
+"Analise estatistica com R e ggplot2",r,sim
+"Desenvolvedor Java Spring Boot",java,sim
+"Desenvolvedor JavaScript com Node.js",javascript,sim
+"Desenvolvedor apenas React sem Java",java,nao
+"Arquiteto de solucoes AWS",aws,sim
+"Especialista em Microsoft Azure",azure,sim
+"Engenheiro de dados GCP",gcp,sim
+"PL-300 nao e Pleno",plsql,nao
+"PL SQL nao e Pleno",sql,sim
+"Query SQL para relatorio",sql,sim

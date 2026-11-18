@@ -15,7 +15,7 @@
 with esperado as (
     select unnest(array[
         'run_id', 'source', 'source_job_id', 'collected_at',
-        'payload_hash', 'raw_payload', 'is_relevant'
+        'link', 'payload_hash', 'raw_payload', 'is_relevant'
     ]) as column_name
 ),
 presente as (

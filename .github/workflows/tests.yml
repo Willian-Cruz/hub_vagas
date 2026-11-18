@@ -9,11 +9,13 @@ on:
     # Executa dbt build com PostgreSQL toda segunda-feira às 02:00 UTC
     - cron: "0 2 * * 1"
 
-jobs:
+permissions:
+  contents: read
 
-  # ── Job 1: Testes unitários (sem banco, rápido) ──────────────────────
-  test:
-    name: Testes unitarios
+jobs:
+  # ── Job 1: Validação de dependências e lockfile ────────────────────────
+  deps:
+    name: Validacao de dependencias
     runs-on: ubuntu-latest
 
     steps:
@@ -26,20 +28,65 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Instalar dependencias
-        run: pip install -r requirements.txt
+      - name: Instalar pip-tools
+        run: pip install pip-tools
 
-      - name: Instalar pip-tools e verificar lock de dependencias
+      - name: Verificar lockfile requirements.txt
         run: |
-          pip install pip-tools
-          piptools compile requirements.in --output-file /tmp/requirements.locked.txt --no-emit-options --quiet
-          diff requirements.txt /tmp/requirements.locked.txt && echo "Lock sincronizado" || { echo "ERRO: requirements.txt esta defasado. Rode 'pip-compile requirements.in' e commit o resultado."; exit 1; }
+          python -m piptools compile requirements.in --output-file /tmp/requirements.locked.txt --no-emit-options --quiet
+          diff requirements.txt /tmp/requirements.locked.txt && echo "Lock requirements.txt sincronizado" || { echo "ERRO: requirements.txt esta defasado. Rode 'pip-compile requirements.in' e commit o resultado."; exit 1; }
+
+      - name: Verificar lockfile requirements-dev.txt
+        run: |
+          python -m piptools compile requirements-dev.in --output-file /tmp/requirements-dev.locked.txt --no-emit-options --quiet
+          diff requirements-dev.txt /tmp/requirements-dev.locked.txt && echo "Lock requirements-dev.txt sincronizado" || { echo "ERRO: requirements-dev.txt esta defasado. Rode 'pip-compile requirements-dev.in' e commit o resultado."; exit 1; }
+
+  # ── Job 2: Lint com ruff ─────────────────────────────────────────────
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    needs: deps
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar ruff
+        run: pip install ruff
+
+      - name: Rodar ruff check
+        run: ruff check app/
+
+  # ── Job 3: Testes unitarios (sem banco, rápido) ──────────────────────
+  test:
+    name: Testes unitarios
+    runs-on: ubuntu-latest
+    needs: deps
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias de producao e desenvolvimento
+        run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Rodar testes unitarios
         run: pytest tests/ -m "not integration" -q --tb=short
         working-directory: ./app
 
-  # ── Job 2: Testes de integracao com PostgreSQL ───────────────────────
+  # ── Job 4: Testes de integracao com PostgreSQL ───────────────────────
   integration:
     name: Testes de integracao (PostgreSQL)
     runs-on: ubuntu-latest
@@ -70,15 +117,12 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Instalar dependencias
-        run: pip install -r requirements.txt
-
-      - name: Instalar dbt e adaptador Postgres
-        run: pip install dbt-core dbt-postgres
+      - name: Instalar dependencias de producao e desenvolvimento
+        run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Criar .env para integracao
         run: |
-          cat > app/.env <<EOF
+          cat > app/.env <<'EOF'
           DATABASE_URL=postgresql+psycopg://hub_vagas:hub_vagas@localhost:5432/hub_vagas
           DB_HOST=localhost
           DB_PORT=5432
@@ -94,10 +138,11 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://hub_vagas:hub_vagas@localhost:5432/hub_vagas
 
-  # ── Job 3: dbt build com PostgreSQL (todo push/PR + schedule semanal) ──
+  # ── Job 5: dbt build com PostgreSQL ──────────────────────────────────
   dbt-build:
     name: dbt build (PostgreSQL)
     runs-on: ubuntu-latest
+    needs: test
 
     services:
       postgres:
@@ -124,16 +169,15 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Instalar dependencias
-        run: pip install -r requirements.txt
+      - name: Instalar dependencias de producao e desenvolvimento
+        run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Instalar dbt e adaptador Postgres
         run: pip install dbt-core dbt-postgres
 
       - name: Criar profiles.yml e .env para dbt
         run: |
-          mkdir -p dbt
-          cat > dbt/profiles.yml <<EOF
+          cat > dbt/profiles.yml <<'EOF'
           hub_vagas:
             target: dev
             outputs:
@@ -147,7 +191,7 @@ jobs:
                 schema: public
                 threads: 4
           EOF
-          cat > app/.env <<EOF
+          cat > app/.env <<'EOF'
           DATABASE_URL=postgresql+psycopg://hub_vagas:hub_vagas@localhost:5432/hub_vagas
           DB_HOST=localhost
           DB_PORT=5432
@@ -159,34 +203,15 @@ jobs:
 
       - name: Rodar dbt build
         run: python app/transform.py
+        working-directory: ./
         env:
           DATABASE_URL: postgresql+psycopg://hub_vagas:hub_vagas@localhost:5432/hub_vagas
 
-  # ── Job 4: Lint com ruff ─────────────────────────────────────────────
-  lint:
-    name: Lint (ruff)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout do codigo
-        uses: actions/checkout@v4
-
-      - name: Configurar Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Instalar ruff
-        run: pip install ruff
-
-      - name: Rodar ruff check
-        run: ruff check app/
-
-  # ── Job 5: Seguranca (detecao de secrets e credenciais) ────────────────
+  # ── Job 6: Seguranca (detecao de secrets com baseline) ─────────────────
   security:
     name: Seguranca (detecao de secrets)
     runs-on: ubuntu-latest
+    needs: deps
 
     steps:
       - name: Checkout do codigo
@@ -195,13 +220,15 @@ jobs:
       - name: Instalar detect-secrets
         run: pip install detect-secrets
 
-      - name: Escanear secrets no repositorio
-        run: detect-secrets scan
+      - name: Escanear secrets no repositorio com baseline
+        run: |
+          python -m detect_secrets scan --baseline .secrets.baseline || { echo "ERRO: Novos secrets detectados. Revise e atualize o baseline se forem falsos positivos."; exit 1; }
 
-  # ── Job 6: Scanner de vulnerabilidades (pip-audit) ─────────────────────
+  # ── Job 7: Scanner de vulnerabilidades (pip-audit) ─────────────────────
   pip-audit:
     name: Scanner de vulnerabilidades (pip-audit)
     runs-on: ubuntu-latest
+    needs: deps
 
     steps:
       - name: Checkout do codigo
@@ -216,7 +243,6 @@ jobs:
       - name: Instalar dependencias e pip-audit
         run: |
           pip install -r requirements.txt -r requirements-dev.txt
-          pip install pip-audit
 
       - name: Auditar vulnerabilidades nas dependencias
         run: |

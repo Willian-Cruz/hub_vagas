@@ -155,8 +155,7 @@ Dedup Silver: todas as linhas são mantidas (nenhuma apagada); cada grupo de con
 ```text
 hub_vagas/
 ├── .github/workflows/
-│   ├── tests.yml       # CI: pytest + lock de dependências a cada push/PR
-│   └── dbt.yml         # CI: dbt build com PostgreSQL temporário a cada push/PR
+│   └── tests.yml       # CI: pytest + lock de dependências a cada push/PR
 ├── app/
 │   ├── config/settings.py   # leitura do .env (DB_* / DATABASE_URL)
 │   ├── database/            # conexão e modelos SQLAlchemy
@@ -292,6 +291,7 @@ Aplique as migrações pendentes com `python infra/migrate.py`:
 
 | Migração | O que faz |
 | --- | --- |
+| `000` | Cria tabelas base legacy (`jobs`, `technologies`, `job_technologies`) — idempotente, aplica primeiro em banco limpo |
 | `001` | Chave primária da tabela de associação `job_technologies` |
 | `002` | Adiciona `jobs.data_coleta` |
 | `003` | Cria o schema `bronze` com `scrape_runs` |
@@ -299,7 +299,9 @@ Aplique as migrações pendentes com `python infra/migrate.py`:
 | `005` | Remove `bronze.job_observations` (`DROP TABLE IF EXISTS`) |
 | `006` | Cria `raw.job_observations` com `raw_payload JSONB`, `payload_hash`, `is_relevant` |
 | `007` | Cria `public.schema_migrations(arquivo, aplicado_em, checksum_sha256)` |
-| `008` | Cria a role `bi_reader` (somente leitura em `gold` e `bronze.scrape_runs`) |
+| `008` | Cria a role `bi_reader` (somente leitura em `gold`, `silver` e `bronze.scrape_runs`) |
+| `009` | Adiciona `ingested_at` e `scraper_version` em `raw.job_observations` (linhagem) |
+| `010` | Adiciona coluna física `link` em `raw.job_observations` (identidade, dedup e rastreabilidade) |
 
 Uma migração que apague dados (ex.: `005`) exige backup antes de aplicar:
 
@@ -418,7 +420,7 @@ O GitHub Actions roda, a cada push/PR na `main`:
 5. Detecção de secrets com detect-secrets
 6. Scan de vulnerabilidades com pip-audit
 
-**Última validação:** dbt build **PASS=181, WARN=6, ERROR=0, SKIP=0**; pytest **319 passed** (1 falha pré-existente `test_migrate.py`).
+**Última validação:** dbt build **PASS=181, WARN=6, ERROR=0, SKIP=0**; pytest **335 passed, 1 skipped** (testes de unidade + integração em PostgreSQL real 15); ruff warnings de estilo (cosméticos); pip-audit **sem vulnerabilidades**; detect-secrets **sem novos segredos** (baseline `.secrets.baseline`).
 
 ---
 
@@ -444,6 +446,7 @@ O GitHub Actions roda, a cada push/PR na `main`:
 | 18 (nov/2026) | **Fase 3 — Operação, CI, segurança e compliance**: Windows Task Scheduler (XML + PowerShell); notificação de falha (webhook/e-mail); retry com backoff; advisory lock; `schema_migrations` + `migrate.py`; role `bi_reader` + `+grants` no dbt; `docs/compliance.md`; CI com `services: postgres`, pytest integration, ruff, pre-commit, pip-tools lock (`requirements.in`) |
 | 19 (nov/2026) | **Fase 4 — Refinamentos**: `detail_url` no `JobSchema`; `fetch_detail_page` / `_merge_detail_into_vaga` no `BaseScraper`; deep scraping para Vagas.com (descrição completa + salário); guia de expansão para portais (Remotar, Sólides, LinkedIn, Indeed, Glassdoor); `AnalyticsService` auditado e funcional (consulta Gold); `.env.example` limpo (sem Cloud Run/Cloud SQL/DASHBOARD_URL); `ARCHITECTURE.md` consolidado no README |
 | 20 (nov/2026) | **Fase 3 — Qualidade, Testes e Observabilidade**: contratos de dados documentados (`docs/data_dictionary/contracts.md`, `docs/data_dictionary/data_dictionary.md`); qualidade dbt reforçada (validação salario_min<=max, precisão/recall de tecnologias, severidade documentada); testes E2E e integração (ambiente PostgreSQL isolado, migrations automáticas, cenários A-G, CI com `services: postgres` e dbt build a cada push/PR); observabilidade (logs estruturados com `run_id`, `mart_saude_pipeline` consolidado, condições de alerta documentadas); dependências e segurança (requirements.in/requirements.txt separados, requirements-dev.in/requirements-dev.txt, Dependabot, pip-audit no CI, `.github/dependabot.yml`) |
+| 21 (nov/2026) | **Fase 3.1 — Estabilização, correção e validação integrada**: CI/CD consolidada (workflow único `tests.yml` com jobs: deps, lint, test, integration, dbt-build, security, pip-audit; `pip-compile` correto; baseline do detect-secrets); testes de integração e E2E em PostgreSQL real (12 cenários A–G); coluna física `link` em `raw.job_observations` (migração 010); validadores Pydantic (título/link/origem não vazios); advisory lock fail-closed; status de execução coerente (erros de persistência → FALHADO/PARTIAL); logs estruturados JSON com `log_event()`; migration 000 para banco limpo; contrato dbt atualizado com `link`; `pyproject.toml` `requires-python = ">=3.11"` |
 
 ---
 

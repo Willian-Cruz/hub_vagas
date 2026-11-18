@@ -39,12 +39,37 @@ LOG_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "logs")
 LOG_FILE = os.path.join(LOG_DIR, "pipeline.log")
 
 
+class JSONFormatter(logging.Formatter):
+    """Formata registros de log como JSON em uma linha."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        entrada = {
+            "timestamp": self.formatTime(record, datefmt="%Y-%m-%dT%H:%M:%S"),
+            "level": record.levelname,
+            "component": record.name,
+            "mensagem": record.getMessage(),
+        }
+        # Campos extras passados via log_event ou extra=
+        for chave in (
+            "run_id", "source", "stage", "event", "status",
+            "duration_ms", "records_received", "records_persisted",
+            "records_duplicated", "records_rejected", "error_type", "error_message",
+        ):
+            valor = getattr(record, chave, None)
+            if valor is not None:
+                entrada[chave] = valor
+        if record.exc_info:
+            entrada["error_type"] = record.exc_info[0].__name__
+            entrada["error_message"] = str(record.exc_info[1])
+        return json.dumps(entrada, ensure_ascii=False)
+
+
 def get_logger(name: str) -> logging.Logger:
     """
     Retorna um logger configurado com dois handlers:
         - Console: mostra INFO e acima
-        - Arquivo: grava INFO e acima com timestamp completo
-                    Rotaciona em 5 MB, mantém 3 arquivos de backup
+        - Arquivo: grava INFO e acima em JSON (uma linha por evento)
+                   Rotaciona em 5 MB, mantém 3 arquivos de backup
 
     Args:
         name: normalmente __name__ do módulo que chama
@@ -60,11 +85,8 @@ def get_logger(name: str) -> logging.Logger:
 
     logger.setLevel(logging.DEBUG)
 
-    # ── Formato ──────────────────────────────────────────────────────────
-    fmt = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    # ── Formato JSON ───────────────────────────────────────────────────────
+    fmt = JSONFormatter()
 
     # ── Handler de arquivo (rotativo) ────────────────────────────────────
     os.makedirs(LOG_DIR, exist_ok=True)
@@ -100,6 +122,7 @@ def log_event(
     duration_ms: float | None = None,
     records_received: int | None = None,
     records_persisted: int | None = None,
+    records_duplicated: int | None = None,
     records_rejected: int | None = None,
     error_type: str | None = None,
     error_message: str | None = None,
@@ -141,6 +164,8 @@ def log_event(
         entrada["records_received"] = records_received
     if records_persisted is not None:
         entrada["records_persisted"] = records_persisted
+    if records_duplicated is not None:
+        entrada["records_duplicated"] = records_duplicated
     if records_rejected is not None:
         entrada["records_rejected"] = records_rejected
     if error_type is not None:

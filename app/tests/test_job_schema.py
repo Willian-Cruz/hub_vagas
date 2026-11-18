@@ -45,10 +45,20 @@ class TestCamposObrigatorios:
         with pytest.raises(ValidationError):
             JobSchema(titulo="Vaga X", link="https://example.com/v/1")
 
-    def test_titulo_vazio_aceito_porem_valido_tipo(self):
-        # string vazia é tipo str válido; semântica de NULL é tratada no dbt
-        vaga = JobSchema(titulo="", link="https://example.com/v/1", origem="InfoJobs")
-        assert vaga.titulo == ""
+    def test_titulo_vazio_e_rejeitado(self):
+        # Título obrigatório não pode ser vazio ou apenas espaços
+        with pytest.raises(ValidationError):
+            JobSchema(titulo="", link="https://example.com/v/1", origem="InfoJobs")
+        with pytest.raises(ValidationError):
+            JobSchema(titulo="   ", link="https://example.com/v/1", origem="InfoJobs")
+
+    def test_link_vazio_e_rejeitado(self):
+        with pytest.raises(ValidationError):
+            JobSchema(titulo="Vaga X", link="", origem="InfoJobs")
+
+    def test_origem_vazio_e_rejeitado(self):
+        with pytest.raises(ValidationError):
+            JobSchema(titulo="Vaga X", link="https://example.com/v/1", origem="")
 
     def test_link_tipo_invalido_falha(self):
         with pytest.raises(ValidationError):

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class JobSchema(BaseModel):
@@ -45,3 +45,27 @@ class JobSchema(BaseModel):
     # gravada em raw.job_observations.scraper_version para permitir rastrear
     # qualquer registro da Gold de volta à execução original.
     scraper_version: Optional[str] = "1.0.0"
+
+    @field_validator("titulo")
+    @classmethod
+    def _titulo_nao_vazio(cls, v: str) -> str:
+        """Rejeita título vazio ou apenas espaços em branco."""
+        if v is None or not v.strip():
+            raise ValueError("titulo não pode ser vazio ou conter apenas espaços")
+        return v
+
+    @field_validator("link")
+    @classmethod
+    def _link_nao_vazio(cls, v: str) -> str:
+        """Rejeita link vazio ou apenas espaços em branco."""
+        if v is None or not v.strip():
+            raise ValueError("link não pode ser vazio ou conter apenas espaços")
+        return v
+
+    @field_validator("origem")
+    @classmethod
+    def _origem_nao_vazio(cls, v: str) -> str:
+        """Rejeita origem vazia ou apenas espaços em branco."""
+        if v is None or not v.strip():
+            raise ValueError("origem não pode ser vazia ou conter apenas espaços")
+        return v

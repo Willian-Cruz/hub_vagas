@@ -56,7 +56,8 @@ Campos produzidos pelos scrapers e consumidos pelo `JobRepository.salvar()`.
 | Estado | Significado | Exemplo |
 |--------|-------------|---------|
 | `None` | Campo ausente ou não informado pela fonte | `empresa=None` quando o card não traz empresa |
-| `""` (vazio) | Não usado; sempre convertido para `None` | — |
+| `""` (vazio) | Não usado para `titulo`, `link` ou `origem`; validador Pydantic rejeita strings vazias | `titulo=""` gera `ValidationError` |
+| `""` (vazio) | Outros campos opcionais são convertidos para `None` | — |
 | Valor preenchido | Informação extraída da fonte | `senioridade="Pleno"` |
 
 ---
@@ -73,6 +74,7 @@ Colunas gravadas pelo `JobRepository.salvar()` e consumidas pelo dbt staging.
 | `source_job_id` | text | | Scraper | ID da vaga no portal (id_externo) |
 | `collected_at` | timestamptz | NOT NULL | Pipeline | Momento da coleta no portal |
 | `ingested_at` | timestamptz | NOT NULL DEFAULT now() | Pipeline | Momento da persistência no banco |
+| `link` | text | | Scraper | URL canônica da vaga (coluna física, extraída de raw_payload) |
 | `scraper_version` | text | | Scraper | Versão do coletor utilizado |
 | `payload_hash` | text | NOT NULL | Repository | SHA-256 do `raw_payload` (dedup de retransmissão idêntica) |
 | `raw_payload` | jsonb | NOT NULL | Scraper | Payload bruto, sem normalização de negócio |

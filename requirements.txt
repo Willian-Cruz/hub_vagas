@@ -29,9 +29,7 @@ charset-normalizer==3.5.2
 click==8.5.1
     # via dbt-core
 colorama==0.4.6
-    # via
-    #   dbt-common
-    #   pytest
+    # via dbt-common
 daff==1.4.2
     # via dbt-core
 dbt-adapters==1.24.6
@@ -68,8 +66,6 @@ idna==3.20
     # via requests
 importlib-metadata==10.2.0
     # via metricflow
-iniconfig==2.3.1
-    # via pytest
 isodate==0.7.2
     # via
     #   agate
@@ -116,9 +112,7 @@ opentelemetry-api==1.45.2
 orderly-set==5.5.0
     # via deepdiff
 packaging==26.3
-    # via
-    #   dbt-core
-    #   pytest
+    # via dbt-core
 pandas==3.0.1
     # via -r requirements.in
 parsedatetime==2.6
@@ -129,8 +123,6 @@ pathspec==1.0.4
     #   dbt-core
 playwright==1.60.0
     # via -r requirements.in
-pluggy==1.7.0
-    # via pytest
 protobuf==6.33.6
     # via
     #   dbt-adapters
@@ -152,10 +144,6 @@ pydantic-core==2.46.4
     # via pydantic
 pyee==13.0.1
     # via playwright
-pygments==2.21.0
-    # via pytest
-pytest==9.2.0
-    # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via
     #   dbt-common

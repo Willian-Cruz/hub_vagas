@@ -94,11 +94,11 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://hub_vagas:hub_vagas@localhost:5432/hub_vagas
 
-  # ── Job 3: dbt build com PostgreSQL (schedule semanal) ───────────────
+  # ── Job 3: dbt build com PostgreSQL (todo push/PR + schedule semanal) ──
   dbt-build:
     name: dbt build (PostgreSQL)
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
+    needs: integration
 
     services:
       postgres:
@@ -200,3 +200,28 @@ jobs:
 
       - name: Escanear secrets no repositorio
         run: detect-secrets scan
+
+  # ── Job 6: Scanner de vulnerabilidades (pip-audit) ─────────────────────
+  pip-audit:
+    name: Scanner de vulnerabilidades (pip-audit)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias e pip-audit
+        run: |
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip install pip-audit
+
+      - name: Auditar vulnerabilidades nas dependencias
+        run: |
+          pip-audit --requirement requirements.txt || { echo "ERRO: Vulnerabilidades encontradas em requirements.txt."; exit 1; }
+          pip-audit --requirement requirements-dev.txt || { echo "ERRO: Vulnerabilidades encontradas em requirements-dev.txt."; exit 1; }

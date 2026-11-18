@@ -358,6 +358,42 @@ LONGO PRAZO (3-6 meses)
 └── Streaming/near-real-time —
     gatilho: necessidade de dados < 1 hora de atraso (não o caso atual com ~300 vagas)
 
+
+### 7.6 Adicionar um novo portal (guia de implementação)
+
+Todos os portais seguem o **Template Method** de `BaseScraper`. Para adicionar um
+novo portal (ex.: Remotar, Sólides, LinkedIn, Indeed, Glassdoor):
+
+1. **Criar `app/scrapers/<portal>_scraper.py`** herdando `BaseScraper`:
+   - Definir `SOURCE`, `BASE_URL`, `USER_AGENT`
+   - Implementar `_buscar_pagina()` (busca HTML da página de listagem)
+   - Implementar `_parsear_cards()` (extrai `JobSchema` dos cards)
+   - Opcional: implementar `fetch_detail_page()` para deep scraping
+   - Opcional: definir `MAX_DETAIL_PAGES > 0` se deep scraping for usado
+
+2. **Garantir o contrato de NULL**: todos os campos `Optional` devolvem `None`
+   quando não há informação; nunca textos tipo "Não informado".
+
+3. **Filtro de relevância**: aplicado centralmente em
+   `CollectorService.coletar_resultados()` via `RelevanceService.separar()` —
+   o scraper não precisa filtrar.
+
+4. **Senioridade**: deixada como `None` no scraper; a normalização é feita
+   exclusivamente pelo dbt (`normalize_seniority` + `classify_seniority_cascade`).
+
+5. **Registrar em `CollectorService._SCRAPERS_BASE`** (ou usar feature flag
+   `GUPY_ENABLED`-style para portais em calibração).
+
+6. **Adicionar fonte ao `dbt/models/sources.yml`** para que o dbt staging
+   leia da `raw_observations.job_observations`.
+
+7. **Criar fixture de teste** em `app/tests/fixtures/` com HTML real do portal
+   e adicionar teste em `app/tests/test_<portal>_scraper.py`.
+
+**Ordem sugerida de expansão:** Remotar → Sólides → LinkedIn → Indeed → Glassdoor.
+Cada um exige calibração de seletores contra HTML real antes de ser ativado.
+
+
 Itens REMOVIDOS do roadmap (não respondem a dor real com ~300 vagas):
   ✗ Kafka + Flink (streaming desnecessário para batch diário)
   ✗ Feature store para ML (não há modelos de ML no escopo)

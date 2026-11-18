@@ -21,6 +21,10 @@ class JobSchema(BaseModel):
     link: str
     origem: str
 
+    # URL da página de detalhe da vaga (quando o scraper consegue navegar até ela).
+    # Usado para deep scraping: captura descrição completa e salário do card detalhado.
+    detail_url: Optional[str] = None
+
     # Identificação e metadados que o card do portal já traz
     id_externo: Optional[str] = None        # ID da vaga no portal (estável entre coletas)
     data_publicacao: Optional[datetime] = None

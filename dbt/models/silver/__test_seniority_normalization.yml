@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: __test_seniority_normalization
+    description: "Casos de teste para a macro normalize_seniority (PL/SQL, PL-300, Liderança, etc.)."
+    columns:
+      - name: senioridade_normalizada
+        tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: esperado
+      - name: titulo

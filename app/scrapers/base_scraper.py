@@ -72,6 +72,11 @@ class BaseScraper(ABC):
     MAX_RETRIES = 3          # número de tentativas após a primeira falha
     RETRY_BACKOFF_BASE = 2   # segundos base para backoff exponencial
 
+    # ── Deep scraping (item 3) ─────────────────────────────────────────────
+    # Número máximo de vagas para as quais buscar a página de detalhe.
+    # 0 = desativado. Subclasses definem > 0 quando suportam deep scraping.
+    MAX_DETAIL_PAGES = 0
+
     # ── Template Method ───────────────────────────────────────────────────
     @classmethod
     def coletar(cls) -> ScrapeResult:
@@ -151,6 +156,26 @@ class BaseScraper(ABC):
                 f"{len(vagas_pagina)} card(s)"
             )
 
+        # ── 4b. Deep scraping: buscar páginas de detalhe (opcional) ─────
+        if cls.MAX_DETAIL_PAGES > 0:
+            cls._log(
+                f"Deep scraping: buscando detalhe de até {cls.MAX_DETAIL_PAGES} "
+                f"vaga(s) de {len(todas_vagas)} coletada(s)"
+            )
+            for vaga in todas_vagas[: cls.MAX_DETAIL_PAGES]:
+                if not vaga.detail_url:
+                    continue
+                cls._aguardar_intervalo_com_jitter()
+                try:
+                    detail_html = cls.fetch_detail_page(vaga.detail_url)
+                    if detail_html:
+                        vaga = cls._merge_detail_into_vaga(vaga, detail_html)
+                        # Substitui a vaga na lista (JobSchema é imutável -> pydantic cria nova)
+                        idx = todas_vagas.index(vaga)
+                        todas_vagas[idx] = vaga
+                except Exception as exc:
+                    cls._log(f"Falha ao buscar detalhe de {vaga.detail_url}: {exc}")
+
         # ── 5. Montagem do ScrapeResult final ───────────────────────────
         status = cls._determinar_status(
             erro_coleta=erro_coleta,
@@ -208,6 +233,31 @@ class BaseScraper(ABC):
         cls, conteudo
     ) -> tuple[list[JobSchema], int, int]:
         """Extrai (vagas válidas, cards inválidos, total de cards) do conteúdo."""
+
+    # ── Deep scraping (item 3) ─────────────────────────────────────────────
+    # Opcional: subclasses que conseguem navegar até a página de detalhe
+    # sobrescrevem este método. Retorna o HTML da página de detalhe ou None
+    # quando o portal não suporta / não foi implementado.
+    @classmethod
+    def fetch_detail_page(cls, detail_url: str) -> str | None:
+        """Busca o HTML da página de detalhe de uma vaga.
+
+        Implementação padrão não faz nada (retorna None). Subclasses que
+        suportam deep scraping (ex.: Vagas.com) sobrescrevem este método
+        usando Playwright ou requests conforme o portal exigir.
+        """
+        return None
+
+    @classmethod
+    def _merge_detail_into_vaga(
+        cls, vaga: JobSchema, detail_html: str | None
+    ) -> JobSchema:
+        """Mescla dados extraídos da página de detalhe na vaga.
+
+        Implementação padrão não altera nada. Subclasses sobrescrevem para
+        preencher descricao completa, salario detalhado, etc.
+        """
+        return vaga
 
     # ── Utilitários compartilhados ────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import main
 from repositories.bronze_repository import BronzeRepository
-from repositories.job_repository import DUPLICADA, ERRO, JobRepository, SALVA
+from repositories.job_repository import DUPLICADA, ERRO, JobRepository, REVISADA, SALVA
 from schemas.job_schema import JobSchema
 from scrapers.base_scraper import ScrapeResult, ScrapeStatus
 from services.collector_service import CollectorService
@@ -66,7 +66,7 @@ def test_pipeline_persiste_vagas_parciais_como_sucesso(monkeypatch):
 
     assert metricas["sucesso"] is True  # PARTIAL com vagas = sucesso
     assert metricas["coletadas"] == 1
-    assert metricas["raw_salvas"] == 1
+    assert metricas["raw_novas"] == 1
     assert metricas["bronze_ok"] is True
     assert metricas["fontes_parcial"] == 1
     assert metricas["fontes_falha"] == 0
@@ -110,7 +110,7 @@ def test_pipeline_considera_erro_de_persistencia_como_falha(monkeypatch):
 
     assert metricas["sucesso"] is True
     assert metricas["coletadas"] == 1
-    assert metricas["raw_salvas"] == 1
+    assert metricas["raw_novas"] == 1
 
 
 def test_pipeline_converte_excecao_geral_em_falha(monkeypatch):

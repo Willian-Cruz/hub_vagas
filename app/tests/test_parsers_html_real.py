@@ -128,7 +128,9 @@ class TestVagasComHtmlReal:
             assert "  " not in job.descricao
 
     def test_filtro_de_relevancia_mantem_so_vagas_de_dados(self, vagas):
-        relevantes, descartadas = RelevanceService.separar(vagas[0])
+        todas = RelevanceService.separar(vagas[0])
+        relevantes = [j for j in todas if j.is_relevant]
+        descartadas = [j for j in todas if not j.is_relevant]
         titulos_ok = {j.titulo for j in relevantes}
         titulos_fora = {j.titulo for j in descartadas}
 
@@ -192,10 +194,10 @@ class TestInfoJobsHtmlReal:
             "Sem experiência",
             None,
         ]
-        # "Entre 1 e 3 anos" é experiência: nunca vira o texto da senioridade. A senioridade sai da
-        # cascata (título > descrição > experiência); estas 9 vagas são todas de estágio pelo título.
-        assert all(j.senioridade == "Estágio/Trainee" for j in jobs)
-        assert all(j.raw_payload["senioridade_origem"] == "titulo" for j in jobs)
+        # "Entre 1 e 3 anos" é experiência: nunca vira o texto da senioridade.
+        # Senioridade agora é computada no dbt (Silver), não no scraper.
+        assert all(j.senioridade is None for j in jobs)
+        assert all(j.raw_payload["senioridade_origem"] is None for j in jobs)
 
     def test_modalidade_e_escolaridade(self, infojobs):
         jobs, _, _ = infojobs
@@ -219,7 +221,9 @@ class TestInfoJobsHtmlReal:
         assert jobs[-1].data_publicacao == datetime(2026, 9, 21, 2, 23, 0)
 
     def test_filtro_de_relevancia_mantem_so_a_vaga_de_dados(self, infojobs):
-        relevantes, descartadas = RelevanceService.separar(infojobs[0])
+        todas = RelevanceService.separar(infojobs[0])
+        relevantes = [j for j in todas if j.is_relevant]
+        descartadas = [j for j in todas if not j.is_relevant]
         assert len(relevantes) == 1
         assert relevantes[0].titulo.startswith("Estágio Em Análise De Dados")
         assert len(descartadas) == 8

@@ -1,18 +1,22 @@
--- Gold: mart_salarios — cobertura salarial por origem.
+-- Gold: mart_salarios — cobertura salarial por origem e senioridade.
 --
 -- Denominador = total de vagas; numerador = vagas com salário informado.
--- Alinha-se à decisão P4: `a_combinar` só quando o portal informa explicitamente.
+-- `a_combinar` só aparece quando o portal informa explicitamente (não é fallback).
 select
     origem,
+    senioridade,
     count(*) as total_vagas,
-    sum(case when salario is not null then 1 else 0 end) as vagas_com_salario,
+    sum(case when salario_tipo in ('exato', 'faixa') then 1 else 0 end) as n_com_salario,
     round(
-        100.0 * sum(case when salario is not null then 1 else 0 end)
+        100.0 * sum(case when salario_tipo in ('exato', 'faixa') then 1 else 0 end)
         / nullif(count(*), 0),
         1
     ) as pct_com_salario,
-    sum(case when salario is not null then 1 else 0 end)
-        * 1.0 / nullif(count(*), 0) as share_com_salario,
+    round(avg(salario_min), 2) as salario_min_medio,
+    round(avg(salario_max), 2) as salario_max_medio,
+    round(percentile_cont(0.5) within group (order by salario_min)::numeric, 2) as salario_min_mediana,
+    round(percentile_cont(0.5) within group (order by salario_max)::numeric, 2) as salario_max_mediana,
     current_timestamp as atualizado_em
 from {{ ref('jobs') }}
-group by origem
+where senioridade is not null
+group by origem, senioridade

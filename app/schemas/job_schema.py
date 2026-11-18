@@ -29,5 +29,10 @@ class JobSchema(BaseModel):
     escolaridade: Optional[str] = None      # ex.: "Ensino Superior"
     qtd_posicoes: Optional[int] = None      # ex.: "Pleno - 2 vagas" -> 2
 
+    # Filtro de relevância: True quando o título casa com termos_relevancia.csv.
+    # Quando False, motivo_relevancia registra por que foi descartada.
+    is_relevant: bool = True
+    motivo_relevancia: Optional[str] = None
+
     # O fragmento é mantido para Bronze, mas não integra o contrato normalizado.
     raw_payload: dict[str, Any] = Field(default_factory=dict, exclude=True)

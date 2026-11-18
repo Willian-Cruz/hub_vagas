@@ -33,7 +33,7 @@ from sqlalchemy import text
 from utils.logger import get_logger
 from services.collector_service import CollectorService
 from repositories.bronze_repository import BronzeRepository
-from repositories.job_repository import DUPLICADA, ERRO, JobRepository, SALVA
+from repositories.job_repository import DUPLICADA, ERRO, JobRepository, REVISADA, SALVA
 from scrapers.base_scraper import ScrapeStatus
 from database.connection import engine
 from notifier import enviar_falha
@@ -136,7 +136,8 @@ class PipelineService:
             "run_id": None,
             "coletadas":      0,
             "descartadas":    0,
-            "raw_salvas":     0,
+            "raw_novas":      0,
+            "raw_revisadas":  0,
             "raw_duplicadas": 0,
             "raw_erros":      0,
             "bronze_ok":      False,
@@ -213,14 +214,17 @@ class PipelineService:
                         vaga, run_id=run_id
                     )
                     if resultado_salvamento == SALVA:
-                        metricas["raw_salvas"] += 1
+                        metricas["raw_novas"] += 1
+                    elif resultado_salvamento == REVISADA:
+                        metricas["raw_revisadas"] += 1
                     elif resultado_salvamento == DUPLICADA:
                         metricas["raw_duplicadas"] += 1
                     else:
                         metricas["raw_erros"] += 1
                 logger.info(
-                    "Raw concluída — %d salvas, %d duplicadas, %d erros",
-                    metricas["raw_salvas"],
+                    "Raw concluída — %d novas, %d revistas, %d duplicadas, %d erros",
+                    metricas["raw_novas"],
+                    metricas["raw_revisadas"],
                     metricas["raw_duplicadas"],
                     metricas["raw_erros"],
                 )
@@ -278,7 +282,8 @@ class PipelineService:
                 f"PIPELINE {status} em {metricas['duracao_seg']}s | "
                 f"Coletadas: {metricas['coletadas']} | "
                 f"Descartadas: {metricas['descartadas']} | "
-                f"Raw: {metricas['raw_salvas']} salvas / "
+                f"Raw: {metricas['raw_novas']} novas / "
+                f"{metricas['raw_revisadas']} revistas / "
                 f"{metricas['raw_duplicadas']} dup / {metricas['raw_erros']} err | "
                 f"Fontes: {metricas['fontes_sucesso']} ok, {metricas['fontes_parcial']} parcial, {metricas['fontes_falha']} falha, {metricas['fontes_vazio']} vazio"
             )

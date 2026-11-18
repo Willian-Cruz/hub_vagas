@@ -19,9 +19,10 @@ from uuid import uuid4
 
 from repositories.job_repository import (
     JobRepository,
-    SALVA,
     DUPLICADA,
     ERRO,
+    REVISADA,
+    SALVA,
     _payload_hash,
     _raw_payload_de_vaga,
 )
@@ -100,13 +101,21 @@ class TestSalvaEDedup:
         session.commit.assert_not_called()
         session.rollback.assert_not_called()
 
-    def test_payload_diferente_retorna_salva(self):
+    def test_payload_diferente_retorna_revisada(self):
         vaga = _vaga()
         outro_hash = "0" * 64
         session_class, session = _mock_session(fetchone_return=(outro_hash,))
 
         with patch("repositories.job_repository.SessionLocal", session_class):
-            assert JobRepository.salvar(vaga) == SALVA
+            assert JobRepository.salvar(vaga) == REVISADA
+
+        session.commit.assert_called_once()
+
+    def test_primeira_coleta_retorna_salva(self):
+        session_class, session = _mock_session(fetchone_return=None)
+
+        with patch("repositories.job_repository.SessionLocal", session_class):
+            assert JobRepository.salvar(_vaga()) == SALVA
 
         session.commit.assert_called_once()
 

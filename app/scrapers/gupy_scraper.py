@@ -5,7 +5,6 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 from bs4 import BeautifulSoup
 from schemas.job_schema import JobSchema
 from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
-from services.seniority_service import classificar_senioridade
 
 
 class GupyScraper(BaseScraper):
@@ -280,14 +279,8 @@ class GupyScraper(BaseScraper):
 
     @classmethod
     def _extrair_senioridade(cls, titulo: str, descricao: str | None = None) -> str | None:
-        """Usa a cascata completa do seniority_service em vez de regex isolada.
-
-        Tradução da regra: portal → título → nível explícito na descrição →
-        campo de experiência → anos na descrição. Retorna None quando não há
-        evidência (em vez de 'Não informado').
-        """
-        result = classificar_senioridade(titulo, descricao=descricao)
-        return result.nivel  # tipo str | None
+        """Senioridade é classificada no dbt (camada Silver), não no scraper."""
+        return None
 
     @staticmethod
     def _parece_local(texto: str) -> bool:

@@ -13,7 +13,6 @@ from bs4 import BeautifulSoup
 
 from scrapers import catho_parser
 from scrapers.parser_utils import empresa_ou_none, limpar, parse_salario, salario_sem_beneficios
-from services.normalize_service import NormalizeService
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HOJE = date(2026, 11, 11)  # dia da captura (window.offersgriddata.toddat, na Catho)
@@ -157,32 +156,10 @@ def test_catho_atualizada_nao_e_data_de_publicacao(catho):
 
 
 def test_catho_senioridade_vem_so_do_titulo(catho):
-    esperado = {
-        "39232461": "Júnior",         # "Anl oper atacado jr ..."
-        "39214464": "Júnior",         # "... JR"
-        "39164082": "Júnior",         # "... DTI Jr. (Dados e Automação"
-        "39209706": "Estágio/Trainee",
-        "39194569": "Estágio/Trainee",
-        "39191473": "Pleno",
-    }
-    for id_, nivel in esperado.items():
-        assert catho[id_].job["senioridade"] == nivel
-        assert catho[id_].extra["senioridade_origem"] == "titulo"
-    for id_, card in catho.items():
-        if id_ not in esperado:
-            assert card.job["senioridade"] is None
-            assert card.extra["senioridade_origem"] is None
-
-
-def test_catho_titulos_reais_dao_o_mesmo_nivel_do_pipeline(catho):
-    """Quando a senioridade vem do título, é a mesma do NormalizeService; quando não vem, o
-    pipeline também não acha nível no título."""
+    # Senioridade agora é computada no dbt (Silver), não no parser.
     for card in catho.values():
-        do_pipeline = NormalizeService.normalizar_senioridade(card.job["titulo"], de_titulo=True)
-        if card.extra["senioridade_origem"] == "titulo":
-            assert card.job["senioridade"] == do_pipeline, card.job["titulo"]
-        else:
-            assert do_pipeline is None, card.job["titulo"]
+        assert card.job["senioridade"] is None
+        assert card.extra["senioridade_origem"] is None
 
 
 # ----------------------------------------------- nenhum texto inventado

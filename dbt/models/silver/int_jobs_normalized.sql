@@ -3,36 +3,41 @@
 with cleaned as (
     select * from {{ ref('int_jobs_unioned') }}
 ),
-
-normalized as (
+salario_texto as (
     select
-        raw_job_id,
-        origem,
-        link,
-        id_externo,
-        titulo,
-        empresa,
-        -- Nível do portal tem prioridade; sem ele, infere do título; por fim, cascata completa
-        {% set np = normalize_seniority('senioridade_raw') %}
-        {% set tt = normalize_seniority('titulo', include_tecnico=false) %}
-        {% set cascade = classify_seniority_cascade('senioridade_raw', 'titulo', 'experiencia', 'descricao') %}
-        coalesce(
-            {{ np }},
-            {{ tt }},
-            {{ cascade }}
-        ) as senioridade,
-        {{ normalize_location('localizacao_raw') }} as localizacao,
-        descricao,
-        {{ extract_salary('salario_raw', 'descricao') }} as salario,
-        modalidade_raw,
-        experiencia,
-        escolaridade,
-        data_publicacao,
-        qtd_posicoes,
-        data_coleta,
-        is_relevant,
-        descricao_truncada
+        *,
+        {{ extract_salary('salario_raw', 'descricao') }} as salario_texto
     from cleaned
 )
-
-select * from normalized
+select
+    raw_job_id,
+    origem,
+    link,
+    id_externo,
+    titulo,
+    empresa,
+    -- Nível do portal tem prioridade; sem ele, infere do título; por fim, cascata completa
+    {% set np = normalize_seniority('senioridade_raw') %}
+    {% set tt = normalize_seniority('titulo', include_tecnico=false) %}
+    {% set cascade = classify_seniority_cascade('senioridade_raw', 'titulo', 'experiencia', 'descricao') %}
+    coalesce(
+        {{ np }},
+        {{ tt }},
+        {{ cascade }}
+    ) as senioridade,
+    {{ normalize_location('localizacao_raw') }} as localizacao,
+    descricao,
+    -- Salário: texto como publicado + componentes numéricos e tipo
+    salario_texto,
+    {{ salario_min('salario_texto') }} as salario_min,
+    {{ salario_max('salario_texto') }} as salario_max,
+    {{ salario_tipo('salario_texto') }} as salario_tipo,
+    modalidade_raw,
+    experiencia,
+    escolaridade,
+    data_publicacao,
+    qtd_posicoes,
+    data_coleta,
+    is_relevant,
+    descricao_truncada
+from salario_texto

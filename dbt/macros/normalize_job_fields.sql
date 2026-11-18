@@ -94,18 +94,79 @@ end
 {% endmacro %}
 
 {# Salário informado pelo portal; senão, valor "R$ ..." achado na descrição.
-   Retorna NULL quando não há nenhum dos dois. #}
+   Retorna NULL quando não há nenhum dos dois. "A combinar" só vem do portal,
+   nunca é infirido da descrição. #}
 {% macro extract_salary(salary_column, description_column) %}
 case
     when {{ salary_column }} is not null then {{ salary_column }}
-    when coalesce({{ description_column }}, '') ~* '(a\s+combinar|confidencial|não\s+divulgado|sigiloso)'
-        then 'A combinar'
     when coalesce({{ description_column }}, '') ~* 'r\$\s*[0-9]'
         then regexp_replace(
             substring({{ description_column }} from '(?i)r\$\s*[0-9.,]+'),
             'r\$', 'R$', 'i'
         )
     else null
+end
+{% endmacro %}
+
+{# Parse de salário em texto para valor numérico mínimo.
+   Remove "R$", pontos de milhares e vírgula decimal. #}
+{% macro salario_min(salario_texto_column) %}
+case
+    when {{ salario_texto_column }} is null then null
+    when lower({{ salario_texto_column }}) ~ 'a combinar' then null
+    when {{ salario_texto_column }} ~* 'r\$\s*([0-9.,]+)\s*(?:a|à|-)\s*r\$\s*([0-9.,]+)' then
+        replace(
+            regexp_replace(
+                substring({{ salario_texto_column }} from '(?i)r\$\s*([0-9.,]+)\s*(?:a|à|-)'),
+                '[^0-9,]', '', 'g'
+            ),
+            ',', '.'
+        )::numeric
+    when {{ salario_texto_column }} ~* 'r\$\s*([0-9.,]+)' then
+        replace(
+            regexp_replace(
+                substring({{ salario_texto_column }} from '(?i)r\$\s*([0-9.,]+)'),
+                '[^0-9,]', '', 'g'
+            ),
+            ',', '.'
+        )::numeric
+    else null
+end
+{% endmacro %}
+
+{# Parse de salário em texto para valor numérico máximo. #}
+{% macro salario_max(salario_texto_column) %}
+case
+    when {{ salario_texto_column }} is null then null
+    when lower({{ salario_texto_column }}) ~ 'a combinar' then null
+    when {{ salario_texto_column }} ~* 'r\$\s*([0-9.,]+)\s*(?:a|à|-)\s*r\$\s*([0-9.,]+)' then
+        replace(
+            regexp_replace(
+                substring({{ salario_texto_column }} from '(?i)(?:a|à|-)\s*r\$\s*([0-9.,]+)'),
+                '[^0-9,]', '', 'g'
+            ),
+            ',', '.'
+        )::numeric
+    when {{ salario_texto_column }} ~* 'r\$\s*([0-9.,]+)' then
+        replace(
+            regexp_replace(
+                substring({{ salario_texto_column }} from '(?i)r\$\s*([0-9.,]+)'),
+                '[^0-9,]', '', 'g'
+            ),
+            ',', '.'
+        )::numeric
+    else null
+end
+{% endmacro %}
+
+{# Classifica o tipo de salário com base no texto publicado. #}
+{% macro salario_tipo(salario_texto_column) %}
+case
+    when {{ salario_texto_column }} is null then 'nao_informado'
+    when lower({{ salario_texto_column }}) ~ 'a combinar' then 'a_combinar'
+    when {{ salario_texto_column }} ~* 'r\$\s*([0-9.,]+)\s*(?:a|à|-)\s*r\$\s*([0-9.,]+)' then 'faixa'
+    when {{ salario_texto_column }} ~* 'r\$\s*([0-9.,]+)' then 'exato'
+    else 'nao_informado'
 end
 {% endmacro %}
 

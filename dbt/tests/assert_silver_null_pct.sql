@@ -25,7 +25,7 @@ with stats as (
         sum(case when localizacao is null then 1 else 0 end) as localizacao_null,
         sum(case when senioridade is null then 1 else 0 end) as senioridade_null,
         sum(case when modalidade is null then 1 else 0 end) as modalidade_null,
-        sum(case when salario is null then 1 else 0 end) as salario_null,
+        sum(case when salario_texto is null then 1 else 0 end) as salario_null,
         sum(case when descricao is null then 1 else 0 end) as descricao_null
     from {{ ref('jobs') }}
 )
@@ -74,7 +74,7 @@ where modalidade_null > total * {{ var('null_pct_modalidade', 0.50) }}
 union all
 
 select
-    'salario' as campo,
+    'salario_texto' as campo,
     salario_null,
     total,
     round(100.0 * salario_null / nullif(total, 0), 1) as pct_null,

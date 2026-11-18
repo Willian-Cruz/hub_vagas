@@ -11,59 +11,6 @@ class NormalizeService:
     (vazio, placeholder do portal ou texto não reconhecido): o banco guarda NULL.
     """
 
-    # _____________________________________________________
-    # SENIORIDADE
-    # Mapeamento: padrão regex → valor normalizado.
-    # A ordem importa: o primeiro padrão que casar vence.
-    # Todos usam limite de palavra (\b): sem isso "pl" casava dentro de
-    # "Supply" e "sr" dentro de outras palavras.
-    # "pl" sozinho é Pleno; "PL/SQL", "PL-SQL", "PL SQL" e "PL-300" não.
-    # "Liderança" entra no mapa: "líder" não casa dentro dessa palavra.
-    # _____________________________________________________
-    SENIORIDADE_MAP = [
-        (r"\b(?:jr|j[uú]nior)\b",                                   "Júnior"),   # 'Júnior/Trainee' → Júnior
-        (r"\bpleno\b|\bmid[- ]?level\b|\bpl\b(?!\s*[/-]?\s*sql\b|[/-]\s*\d)", "Pleno"),
-        (r"\b(?:sr|s[eê]nior)\b",                                   "Sênior"),
-        (r"\b(?:especialista|specialist)\b",                        "Especialista"),
-        (r"\b(?:coordena[cç][aã]o|coordenador(?:a)?|coordinator|"
-         r"supervis[aã]o|supervisor(?:a)?)\b",                      "Coordenador"),
-        (r"\b(?:gerente|ger[eê]ncia|manager|l[ií]deran[cç]a|l[ií]der|lider|leader|lead)\b", "Liderança"),
-        (r"\b(?:diretor(?:a)?|diretoria|director|head|vp)\b",       "Diretoria"),
-        (r"\b(?:trainee|est[aá]gi[oó]s?|estagi[aá]ri[oa]s?)\b",     "Estágio/Trainee"),
-        (r"\bt[eé]cnic[oa]\b",                                      "Técnico"),
-    ]
-
-    # Níveis que só valem quando vêm do campo de nível do portal. No título,
-    # "técnico" costuma ser o tipo de trabalho ("Suporte Técnico"), não o nível.
-    _SO_NO_CAMPO = frozenset({"Técnico"})
-
-    @classmethod
-    def normalizar_senioridade(cls, valor, *, de_titulo: bool = False) -> Optional[str]:
-        """
-        Recebe qualquer string de senioridade e devolve um valor padronizado,
-        ou None se não houver informação ou não reconhecer.
-
-        `de_titulo=True` é para inferir o nível a partir do título da vaga.
-
-        Exemplos:
-            'Pleno/Sênior'  → 'Pleno'   (pega o primeiro match da lista)
-            'Sr.'           → 'Sênior'
-            'JÚNIOR'        → 'Júnior'
-            'Supervisão/Coordenação' → 'Coordenador'
-            ''              → None
-        """
-        texto = valor_ou_none(valor)
-        if texto is None:
-            return None
-
-        texto = texto.lower()
-        for padrao, resultado in cls.SENIORIDADE_MAP:
-            if de_titulo and resultado in cls._SO_NO_CAMPO:
-                continue
-            if re.search(padrao, texto):
-                return resultado
-        return None
-
     ESTADOS_BR = {
         "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
         "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI",

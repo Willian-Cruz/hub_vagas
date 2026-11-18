@@ -1,8 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "hub_vagas"
 version = "1.0.0"
+description = "Pipeline de dados que coleta vagas de Dados e Tecnologia em portais brasileiros"
 requires-python = ">=3.12"
+# Dependências de produção são declaradas em requirements.in e travadas em
+# requirements.txt via pip-compile. Este campo fica vazio intencionalmente para
+# evitar ter duas fontes de verdade de versões.
 dependencies = []
+
+[project.scripts]
+hub-vagas-ingest = "app.main:main"
+hub-vagas-transform = "app.transform:main"
+hub-vagas-scheduler = "app.scheduler:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [tool.ruff]
 line-length = 100

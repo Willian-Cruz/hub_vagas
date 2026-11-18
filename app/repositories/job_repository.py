@@ -137,10 +137,12 @@ class JobRepository:
                     """
                     INSERT INTO raw.job_observations
                         (run_id, source, source_job_id, collected_at,
-                         payload_hash, raw_payload, is_relevant)
+                         payload_hash, raw_payload, is_relevant,
+                         ingested_at, scraper_version)
                     VALUES
                         (:run_id, :source, :source_job_id, :collected_at,
-                         :payload_hash, CAST(:raw_payload AS jsonb), :is_relevant)
+                         :payload_hash, CAST(:raw_payload AS jsonb), :is_relevant,
+                         :ingested_at, :scraper_version)
                     """
                 ),
                 {
@@ -151,6 +153,8 @@ class JobRepository:
                     "payload_hash": payload_hash,
                     "raw_payload": json.dumps(raw_payload, ensure_ascii=False, default=str),
                     "is_relevant": vaga.is_relevant,
+                    "ingested_at": datetime.now(timezone.utc),
+                    "scraper_version": vaga.scraper_version,
                 },
             )
             session.commit()

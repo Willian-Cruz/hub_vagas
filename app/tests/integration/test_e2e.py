@@ -186,23 +186,27 @@ class TestCenarioASucesso:
     def test_fluxo_completo_raw_silver_gold(self, conexao):
         """Cenário A completo: insere na Raw, executa dbt, valida Silver e Gold."""
         run_id = uuid4()
-        vaga = {
-            "titulo": "Engenheiro de Dados Pleno",
-            "empresa": "Empresa Exemplo",
-            "senioridade": "Pleno",
-            "localizacao": "São Paulo - SP",
-            "descricao": "Vaga para engenheiro de dados com Python e SQL e AWS.",
-            "salario": "R$ 8.000,00 a R$ 12.000,00",
-            "link": "https://example.com/vaga/e2e-a-completo",
-            "origem": "Vagas.com",
-            "id_externo": "e2e-a-completo",
-            "data_publicacao": "2026-11-17T10:00:00+00:00",
-            "modalidade": "Híbrido",
-            "is_relevant": True,
-            "collected_at": "2026-11-17T10:00:00+00:00",
-        }
 
-        _inserir_raw(conexao, run_id, vaga)
+        # Insere 10 vagas na raw (threshold do assert_silver_volume_minimo é 10)
+        vagas = []
+        for i in range(10):
+            vaga = {
+                "titulo": f"Engenheiro de Dados {i}",
+                "empresa": f"Empresa {i}",
+                "senioridade": ["Pleno", "Sênior", "Júnior"][i % 3],
+                "localizacao": "São Paulo - SP",
+                "descricao": f"Vaga {i} para engenheiro de dados com Python, SQL e AWS.",
+                "salario": f"R$ {8000 + i * 1000},00 a R$ {12000 + i * 1000},00",
+                "link": f"https://example.com/vaga/e2e-a-completo-{i}",
+                "origem": ["Vagas.com", "InfoJobs", "Gupy"][i % 3],
+                "id_externo": f"e2e-a-completo-{i}",
+                "data_publicacao": "2026-11-17T10:00:00+00:00",
+                "modalidade": ["Híbrido", "Remoto", "Presencial"][i % 3],
+                "is_relevant": True,
+                "collected_at": "2026-11-17T10:00:00+00:00",
+            }
+            vagas.append(vaga)
+            _inserir_raw(conexao, run_id, vaga)
 
         # Registra uma execução de scraper no bronze para satisfacer o freshness
         conexao.execute(
@@ -213,69 +217,70 @@ class TestCenarioASucesso:
                      pages_processed, jobs_found)
                 VALUES
                     (:run_id, :source, 'success', :started_at, :finished_at,
-                     1, 1)
+                     1, 10)
                 """
             ),
             {
                 "run_id": run_id,
-                "source": vaga["origem"],
-                "started_at": vaga["collected_at"],
-                "finished_at": vaga["collected_at"],
+                "source": "Vagas.com",
+                "started_at": "2026-11-17T10:00:00+00:00",
+                "finished_at": "2026-11-17T10:00:00+00:00",
             },
         )
         conexao.commit()
 
         # Executa o dbt build para transformar Raw → Silver → Gold
-        # Em banco de teste com poucos dados, testes de qualidade (freshness,
-        # volume mínimo) podem retornar código != 0. O importante é que os
-        # modelos sejam criados e os dados transformados. Verificamos
-        # explicitamente abaixo.
         codigo_dbt = _executar_dbt_build()
-        assert codigo_dbt in (0, 1, 2), f"dbt build falhou com código {codigo_dbt}"
+        # dbt build deve retornar 0 agora que há dados suficientes para
+        # passar nos testes de qualidade (volume mínimo, freshness)
+        assert codigo_dbt == 0, f"dbt build falhou com código {codigo_dbt}"
 
-        # Valida Silver: a vaga deve aparecer em silver.jobs (canônica)
+        # Valida Silver: as vagas devem aparecer em silver.jobs (canônicas)
+        count_silver = conexao.execute(
+            text("SELECT count(*) FROM silver.jobs")
+        ).scalar()
+        assert count_silver >= 10, f"Esperava pelo menos 10 vagas na Silver, encontrou {count_silver}"
+
+        # Valida uma vaga específica na Silver
         row_silver = conexao.execute(
             text(
                 "SELECT titulo, empresa, senioridade, localizacao, "
                 "salario_min, salario_max, modalidade, link, origem, is_canonical "
                 "FROM silver.jobs WHERE link = :link"
             ),
-            {"link": vaga["link"]},
+            {"link": "https://example.com/vaga/e2e-a-completo-0"},
         ).fetchone()
 
-        assert row_silver is not None, "Vaga não encontrada na Silver"
-        assert row_silver.titulo == vaga["titulo"]
-        assert row_silver.empresa == vaga["empresa"]
+        assert row_silver is not None, "Vaga 0 não encontrada na Silver"
+        assert row_silver.titulo == "Engenheiro de Dados 0"
+        assert row_silver.empresa == "Empresa 0"
         assert row_silver.senioridade == "Pleno"
         assert row_silver.localizacao == "São Paulo - SP"
         assert row_silver.modalidade == "Híbrido"
-        assert row_silver.link == vaga["link"]
+        assert row_silver.link == "https://example.com/vaga/e2e-a-completo-0"
         assert row_silver.origem == "Vagas.com"
         assert row_silver.is_canonical is True
 
-        # Valida Gold: mart_vagas deve conter a vaga com tecnologias detectadas
-        # (pode estar vazia se dbt build parou por ERRORs de qualidade em
-        # banco de teste com poucos dados; verificamos apenas se existir)
+        # Valida Gold: mart_vagas deve conter as vagas com tecnologias detectadas
         tabela_gold_existe = conexao.execute(
-            text(
-                "SELECT to_regclass('gold.mart_vagas')"
-            )
+            text("SELECT to_regclass('gold.mart_vagas')")
         ).scalar()
+        assert tabela_gold_existe is not None, "Tabela gold.mart_vagas não foi criada"
 
-        if tabela_gold_existe:
-            row_gold = conexao.execute(
-                text(
-                    "SELECT titulo, tecnologias, origem "
-                    "FROM gold.mart_vagas WHERE link = :link"
-                ),
-                {"link": vaga["link"]},
-            ).fetchone()
+        row_gold = conexao.execute(
+            text(
+                "SELECT titulo, tecnologias, origem "
+                "FROM gold.mart_vagas WHERE link = :link"
+            ),
+            {"link": "https://example.com/vaga/e2e-a-completo-0"},
+        ).fetchone()
 
-            if row_gold is not None:
-                assert row_gold.titulo == vaga["titulo"]
-                assert "AWS" in row_gold.tecnologias, f"AWS não detectada em: {row_gold.tecnologias}"
-                assert "Python" in row_gold.tecnologias, f"Python não detectada em: {row_gold.tecnologias}"
-                assert "SQL" in row_gold.tecnologias, f"SQL não detectada em: {row_gold.tecnologias}"
+        assert row_gold is not None, "Vaga 0 não encontrada no mart_vagas (Gold)"
+        assert row_gold.titulo == "Engenheiro de Dados 0"
+        tecnologias_lower = row_gold.tecnologias.lower()
+        assert "aws" in tecnologias_lower, f"AWS não detectada em: {row_gold.tecnologias}"
+        assert "python" in tecnologias_lower, f"Python não detectada em: {row_gold.tecnologias}"
+        assert "sql" in tecnologias_lower, f"SQL não detectada em: {row_gold.tecnologias}"
 
         # Valida linhagem: run_id deve estar presente na raw
         row_linhagem = conexao.execute(
@@ -283,7 +288,7 @@ class TestCenarioASucesso:
                 "SELECT run_id, ingested_at, scraper_version "
                 "FROM raw.job_observations WHERE link = :link"
             ),
-            {"link": vaga["link"]},
+            {"link": "https://example.com/vaga/e2e-a-completo-0"},
         ).fetchone()
 
         assert row_linhagem.run_id == run_id

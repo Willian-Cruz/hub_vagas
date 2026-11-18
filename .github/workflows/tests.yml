@@ -98,7 +98,6 @@ jobs:
   dbt-build:
     name: dbt build (PostgreSQL)
     runs-on: ubuntu-latest
-    needs: integration
 
     services:
       postgres:
@@ -160,7 +159,6 @@ jobs:
 
       - name: Rodar dbt build
         run: python app/transform.py
-        working-directory: ./..
         env:
           DATABASE_URL: postgresql+psycopg://hub_vagas:hub_vagas@localhost:5432/hub_vagas
 
@@ -184,7 +182,6 @@ jobs:
 
       - name: Rodar ruff check
         run: ruff check app/
-        working-directory: ./..
 
   # ── Job 5: Seguranca (detecao de secrets e credenciais) ────────────────
   security:

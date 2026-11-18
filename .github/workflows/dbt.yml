@@ -13,15 +13,15 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:15
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: hub_vagas_test
+          POSTGRES_USER: hub_vagas
+          POSTGRES_PASSWORD: hub_vagas
+          POSTGRES_DB: hub_vagas
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U postgres"
+          --health-cmd="pg_isready -U hub_vagas -d hub_vagas"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -33,7 +33,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
 
       - name: Install dependencies
@@ -48,31 +48,23 @@ jobs:
           piptools compile requirements.in --output-file /tmp/requirements.locked.txt --no-emit-options --quiet
           diff requirements.txt /tmp/requirements.locked.txt && echo "Lock sincronizado" || { echo "ERRO: requirements.txt esta defasado."; exit 1; }
 
-      - name: Wait for PostgreSQL
+      - name: Create dbt profiles.yml
         run: |
-          for i in {1..30}; do
-            if pg_isready -h localhost -p 5432 -U postgres; then
-              echo "PostgreSQL is ready"
-              break
-            fi
-            echo "Waiting for PostgreSQL... ($i/30)"
-            sleep 2
-          done
-
-      - name: Create database schema
-        run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -d hub_vagas_test -c "CREATE SCHEMA IF NOT EXISTS public;"
-
-      - name: Set dbt environment variables
-        run: |
-          echo "DBT_HOST=localhost" >> $GITHUB_ENV
-          echo "DBT_USER=postgres" >> $GITHUB_ENV
-          echo "DBT_PASSWORD=postgres" >> $GITHUB_ENV
-          echo "DBT_PORT=5432" >> $GITHUB_ENV
-          echo "DBT_DATABASE=hub_vagas_test" >> $GITHUB_ENV
-          echo "DBT_SCHEMA=public" >> $GITHUB_ENV
-          echo "DBT_SSLMODE=disable" >> $GITHUB_ENV
-          echo "DBT_THREADS=2" >> $GITHUB_ENV
+          mkdir -p dbt
+          cat > dbt/profiles.yml <<EOF
+          hub_vagas:
+            target: dev
+            outputs:
+              dev:
+                type: postgres
+                host: localhost
+                port: 5432
+                user: hub_vagas
+                password: hub_vagas
+                dbname: hub_vagas
+                schema: public
+                threads: 4
+          EOF
 
       - name: Run dbt debug
         working-directory: ./dbt

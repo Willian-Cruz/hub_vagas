@@ -19,7 +19,8 @@ with observacoes as (
         raw_payload->>'experiencia' as experiencia,
         raw_payload->>'escolaridade' as escolaridade,
         nullif(raw_payload->>'qtd_posicoes', '')::integer as qtd_posicoes,
-        (raw_payload->>'data_publicacao')::timestamp as data_publicacao
+        (raw_payload->>'data_publicacao')::timestamptz as data_publicacao,
+        nullif(raw_payload->>'data_atualizacao', '')::timestamptz as data_atualizacao
     from {{ source('raw_observations', 'job_observations') }}
     where lower(source) = lower('InfoJobs')
 ),
@@ -45,6 +46,7 @@ select
     salario,
     data_coleta,
     data_publicacao,
+    data_atualizacao,
     modalidade,
     experiencia,
     escolaridade,

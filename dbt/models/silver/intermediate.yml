@@ -49,3 +49,5 @@ models:
           - accepted_values:
               arguments:
                 values: ["faixa", "exato", "a_combinar", "nao_informado"]
+      - name: data_publicacao
+      - name: data_atualizacao

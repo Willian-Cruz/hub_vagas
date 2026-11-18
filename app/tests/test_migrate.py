@@ -105,7 +105,7 @@ def test_garantir_tabela_nao_recria_quando_existe():
 def test_aplicar_migracao_registra_na_tabela():
     migrate = _import_migrate()
     engine = FakeEngine(tabela_existe=True, aplicadas={})
-    caminho = Path("infra/migrations/007_schema_migrations.sql")
+    caminho = Path(__file__).resolve().parents[2] / "infra" / "migrations" / "007_schema_migrations.sql"
 
     migrate.aplicar_migracao(engine, caminho)
 

@@ -17,5 +17,17 @@ values
     ('Power BI'),
     ('Tableau'),
     ('Databricks'),
-    ('Snowflake')
+    ('Snowflake'),
+    ('dbt'),
+    ('BigQuery'),
+    ('Redshift'),
+    ('Excel'),
+    ('Git'),
+    ('Java'),
+    ('Looker'),
+    ('Qlik'),
+    ('PL/SQL'),
+    ('R'),
+    ('JavaScript'),
+    ('Terraform')
 {% endmacro %}

@@ -104,13 +104,21 @@ def test_pipeline_considera_erro_de_persistencia_como_falha(monkeypatch):
         jobs=[_vaga()],
     )
     monkeypatch.setattr(CollectorService, "coletar_resultados", lambda: [resultado])
-    _mock_persistence(monkeypatch)
+    # Simula erro de persistência: salvar retorna ERRO
+    monkeypatch.setattr(JobRepository, "salvar", lambda vaga, run_id=None: ERRO)
+    monkeypatch.setattr(
+        BronzeRepository, "persistir_resultados",
+        lambda resultados, run_id, started_at, finished_at=None: len(
+            [v for r in resultados for v in r.jobs]
+        ),
+    )
 
     metricas = PipelineService.executar()
 
-    assert metricas["sucesso"] is True
-    assert metricas["coletadas"] == 1
-    assert metricas["raw_novas"] == 1
+    assert metricas["sucesso"] is False
+    assert metricas["status"] == "FALHADO"
+    assert metricas["raw_erros"] == 1
+    assert metricas["raw_novas"] == 0
 
 
 def test_pipeline_converte_excecao_geral_em_falha(monkeypatch):

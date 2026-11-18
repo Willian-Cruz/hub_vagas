@@ -172,10 +172,12 @@ def log_event(
         entrada["error_type"] = error_type
     if error_message is not None:
         entrada["error_message"] = error_message
-    if mensagem is not None:
-        entrada["mensagem"] = mensagem
 
-    linha = json.dumps(entrada, ensure_ascii=False)
+    # Mensagem de texto livre (vai para record.getMessage, não duplicada em JSON)
+    mensagem_log = mensagem or ""
+
+    # Campos extras estruturados (timestamp e level já estão em entrada)
+    campos_extra = {k: v for k, v in entrada.items() if k not in ("timestamp", "level")}
 
     nivel = getattr(logging, level.upper(), logging.INFO)
-    logger.log(nivel, linha)
+    logger.log(nivel, mensagem_log, extra=campos_extra)

@@ -440,17 +440,30 @@ class PipelineService:
                     mensagem=f"Pipeline concluído com {metricas['fontes_parcial']} fonte(s) parcial(is)",
                 )
             if not metricas["sucesso"]:
-                log_event(
-                    logger=logger,
-                    level="WARNING",
-                    run_id=str(run_id),
-                    component="pipeline",
-                    stage="finalizacao",
-                    event="pipeline_sem_sucesso",
-                    status="falha",
-                    mensagem="Pipeline não coletou vagas de nenhuma fonte",
-                )
-                enviar_falha(metricas, erro="nenhuma fonte trouxe vagas")
+                if metricas["status"] == "FALHADO":
+                    log_event(
+                        logger=logger,
+                        level="WARNING",
+                        run_id=str(run_id),
+                        component="pipeline",
+                        stage="finalizacao",
+                        event="pipeline_sem_sucesso",
+                        status="falha",
+                        mensagem="Pipeline não coletou vagas de nenhuma fonte",
+                    )
+                    enviar_falha(metricas, erro="nenhuma fonte trouxe vagas")
+                else:
+                    # PARTIAL: loga aviso, mas não envia notificação de falha
+                    log_event(
+                        logger=logger,
+                        level="WARNING",
+                        run_id=str(run_id),
+                        component="pipeline",
+                        stage="finalizacao",
+                        event="pipeline_parcial",
+                        status="parcial",
+                        mensagem="Pipeline concluído parcialmente — algumas fontes falharam ou não trouxeram vagas",
+                    )
 
         except Exception as e:
             log_event(
@@ -471,7 +484,7 @@ class PipelineService:
         finally:
             PipelineService._liberar_travar_execucao(trave_conexao)
             metricas["duracao_seg"] = round(time.time() - inicio, 2)
-            status_final = "SUCESSO" if metricas["sucesso"] else "FALHADO"
+            status_final = metricas["status"]
             log_event(
                 logger=logger,
                 level="INFO",

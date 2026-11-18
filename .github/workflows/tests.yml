@@ -201,6 +201,10 @@ jobs:
           DB_SSLMODE=disable
           EOF
 
+      - name: Executar migrations antes do dbt
+        run: python infra/migrate.py
+        working-directory: ./
+
       - name: Rodar dbt build
         run: python app/transform.py
         working-directory: ./

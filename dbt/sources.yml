@@ -1,0 +1,65 @@
+version: 2
+
+sources:
+  - name: raw_observations
+    database: "{{ env_var('DBT_DATABASE') }}"
+    schema: raw
+    tables:
+      - name: job_observations
+        description: "Observações brutas (append-only) coletadas pelos scrapers."
+        columns:
+          - name: id
+            description: "Identificador da observação."
+            tests: [not_null, unique]
+          - name: run_id
+            description: "UUID da execução de coleta."
+            tests: [not_null]
+          - name: source
+            description: "Origem/portal (Vagas.com, InfoJobs, Gupy, Catho)."
+            tests: [not_null]
+          - name: source_job_id
+            description: "ID da vaga no portal (id_externo), quando disponível."
+          - name: collected_at
+            description: "Momento da coleta no portal."
+            tests: [not_null]
+          - name: ingested_at
+            description: "Momento da persistência no banco (ingestão)."
+            tests: [not_null]
+          - name: link
+            description: "URL canônica da vaga."
+          - name: scraper_version
+            description: "Versão do scraper utilizado na coleta."
+          - name: payload_hash
+            description: "SHA-256 do raw_payload (dedup de retransmissão idêntica)."
+            tests: [not_null]
+          - name: raw_payload
+            description: "Payload bruto do scraper (JSONB), sem normalização de negócio."
+            tests: [not_null]
+          - name: is_relevant
+            description: "True se a vaga passou no filtro de relevância (título)."
+            tests: [not_null]
+          - name: created_at
+            description: "Timestamp de criação do registro."
+            tests: [not_null]
+
+  - name: bronze
+    database: "{{ env_var('DBT_DATABASE') }}"
+    schema: bronze
+    tables:
+      - name: scrape_runs
+        description: "Registro operacional das execuções de coleta por fonte."
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: run_id
+            tests: [not_null]
+          - name: source
+            tests: [not_null]
+          - name: status
+            tests: [not_null]
+          - name: started_at
+            tests: [not_null]
+          - name: finished_at
+          - name: pages_processed
+          - name: jobs_found
+          - name: error

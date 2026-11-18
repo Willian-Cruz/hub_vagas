@@ -38,9 +38,14 @@ def engine_para_banco():
 
 
 def arquivos_migracao():
-    """Devolve arquivos .sql ordenados pelo nome (001, 002, ...)."""
+    """Devolve arquivos .sql ordenados pelo nome (001, 002, ...).
+
+    Aceita nomes no formato NNN_descricao.sql, onde NNN são dígitos.
+    """
     return sorted(
-        p for p in MIGRATIONS_DIR.glob("*.sql") if p.name[0:4].isdigit()
+        p
+        for p in MIGRATIONS_DIR.glob("*.sql")
+        if len(p.name) >= 4 and p.name[:3].isdigit() and p.name[3] in ("_", "-")
     )
 
 

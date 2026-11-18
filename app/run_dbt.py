@@ -59,6 +59,16 @@ def main(argv: list[str] | None = None) -> int:
     _configurar_variaveis_dbt()
     executavel = shutil.which("dbt")
     if not executavel:
+        # Fallback para Windows Store Python (local-packages/Scripts)
+        import site
+
+        for site_dir in site.getusersitepackages().split(os.pathsep):
+            scripts_dir = os.path.join(os.path.dirname(site_dir), "Scripts")
+            candidato = os.path.join(scripts_dir, "dbt.exe")
+            if os.path.isfile(candidato):
+                executavel = candidato
+                break
+    if not executavel:
         print(
             "CLI dbt não encontrado. Ative o venv e instale requirements.txt.",
             file=sys.stderr,

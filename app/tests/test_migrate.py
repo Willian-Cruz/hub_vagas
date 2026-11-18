@@ -72,7 +72,7 @@ def test_arquivos_reais_ordenados():
     nomes = [a.name for a in arquivos]
     # A funcao ja retorna ordenada; verificamos consistencia
     assert nomes == sorted(nomes), f"Nao ordenados: {nomes}"
-    assert all(n[:4].isdigit() for n in nomes), f"Nem todos começam com número: {nomes}"
+    assert all(len(n) >= 4 and n[:3].isdigit() and n[3] in ("_", "-") for n in nomes), f"Nem todos começam com número: {nomes}"
 
 
 def test_checksum_é_determinístico():

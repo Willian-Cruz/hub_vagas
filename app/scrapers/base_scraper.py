@@ -77,6 +77,11 @@ class BaseScraper(ABC):
     # 0 = desativado. Subclasses definem > 0 quando suportam deep scraping.
     MAX_DETAIL_PAGES = 0
 
+    # ── Linhagem de dados (M09) ─────────────────────────────────────────────
+    # Versão do scraper, gravada em raw.job_observations.scraper_version para
+    # permitir rastrear qualquer registro da Gold de volta à execução original.
+    SCRAPER_VERSION = "1.0.0"
+
     # ── Template Method ───────────────────────────────────────────────────
     @classmethod
     def coletar(cls) -> ScrapeResult:
@@ -183,6 +188,12 @@ class BaseScraper(ABC):
             todas_vagas=todas_vagas,
             links_vistos=links_vistos,
         )
+
+        # ── Linhagem (M09): definir scraper_version em todas as vagas ───
+        todas_vagas = [
+            vaga.model_copy(update={"scraper_version": cls.SCRAPER_VERSION})
+            for vaga in todas_vagas
+        ]
 
         cls._log(
             f"Resultado: {status.value}; {len(todas_vagas)} vaga(s); "

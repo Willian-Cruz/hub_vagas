@@ -40,3 +40,8 @@ class JobSchema(BaseModel):
 
     # O fragmento é mantido para Bronze, mas não integra o contrato normalizado.
     raw_payload: dict[str, Any] = Field(default_factory=dict, exclude=True)
+
+    # Linhagem de dados (M09): versão do scraper que coletou esta vaga,
+    # gravada em raw.job_observations.scraper_version para permitir rastrear
+    # qualquer registro da Gold de volta à execução original.
+    scraper_version: Optional[str] = "1.0.0"

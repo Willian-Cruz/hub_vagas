@@ -28,6 +28,9 @@ cleaned as (
         data_publicacao,
         qtd_posicoes,
         data_coleta,
+        ingested_at,
+        scraper_version,
+        run_id,
         data_atualizacao,
         is_relevant,
         -- Descrição truncada: termina em "..." ou é curta demais para ser confiável

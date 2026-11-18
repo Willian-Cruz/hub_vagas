@@ -68,6 +68,8 @@ sources:
             tests: [not_null]
           - name: created_at
             tests: [not_null]
+          - name: ingested_at
+          - name: scraper_version
 
   - name: bronze
     description: "Snapshots append-only gravados pelos scrapers em PostgreSQL (monitoramento de execução)."

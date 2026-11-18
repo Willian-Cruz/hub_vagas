@@ -30,7 +30,6 @@ from scrapers.parser_utils import (
     parse_salario,
     salario_sem_beneficios,
 )
-from services.seniority_service import classificar_senioridade
 
 SOURCE = "Catho"
 BASE_URL = "https://www.catho.com.br"
@@ -115,14 +114,14 @@ def _parse_card(li: Tag, hoje: date) -> CardParseado | None:
             break
     data_dia = datetime.combine(data_card, time.min) if data_card else None
 
-    senioridade = classificar_senioridade(titulo)
+    senioridade_nivel = None
 
     job = {
         "titulo": titulo,
         "link": urljoin(BASE_URL, href),
         "origem": SOURCE,
         "empresa": empresa,
-        "senioridade": senioridade.nivel,
+        "senioridade": senioridade_nivel,
         "localizacao": localizacao,
         "descricao": None,
         "salario": salario_sem_beneficios(salario_bruto),
@@ -140,7 +139,7 @@ def _parse_card(li: Tag, hoje: date) -> CardParseado | None:
         "salario_min": estruturado["min"],
         "salario_max": estruturado["max"],
         "beneficios_qtd": estruturado["beneficios_qtd"],
-        "senioridade_origem": senioridade.origem,
+        "senioridade_origem": None,
     }
     return CardParseado(job=job, extra=extra)
 

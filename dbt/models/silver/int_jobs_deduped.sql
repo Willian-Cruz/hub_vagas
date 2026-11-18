@@ -58,7 +58,10 @@ select
     senioridade,
     localizacao,
     descricao,
-    salario,
+    salario_texto,
+    salario_min,
+    salario_max,
+    salario_tipo,
     modalidade,
     experiencia,
     escolaridade,
@@ -82,5 +85,18 @@ select
     is_relevant,
     descricao_truncada,
     modalidade_origem,
-    (content_rank = 1) as is_canonical
+    (content_rank = 1) as is_canonical,
+    -- Dias que a vaga ficou no ar: diferença entre primeira e última coleta
+    -- do mesmo grupo de dedup. NULL quando só há uma observação.
+    case
+        when first_seen_at is distinct from last_seen_at
+        then extract(epoch from (last_seen_at - first_seen_at)) / 86400
+        else null
+    end as dias_no_ar,
+    -- Vaga ativa: vista nos últimos 3 dias (janela configurável)
+    case
+        when last_seen_at >= (select max(data_coleta) from {{ ref('int_jobs_unioned') }}) - interval '3 days'
+        then true
+        else false
+    end as is_ativa
 from dedup_groups

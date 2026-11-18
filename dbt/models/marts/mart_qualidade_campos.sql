@@ -11,16 +11,16 @@ with campos as (
     select
         origem as fonte,
         (data_coleta at time zone 'America/Sao_Paulo')::date as data_coleta,
-        'titulo' as campo,
+        'salario_texto' as campo,
         count(*) as total_vagas,
-        sum(case when titulo is not null then 1 else 0 end) as vagas_nao_nulas
+        sum(case when salario_texto is not null then 1 else 0 end) as vagas_nao_nulas
     from {{ ref('jobs') }}
     group by origem, (data_coleta at time zone 'America/Sao_Paulo')::date
 
     union all
 
     select
-        origem,
+        origem as fonte,
         (data_coleta at time zone 'America/Sao_Paulo')::date,
         'empresa',
         count(*),
@@ -31,18 +31,7 @@ with campos as (
     union all
 
     select
-        origem,
-        (data_coleta at time zone 'America/Sao_Paulo')::date,
-        'salario',
-        count(*),
-        sum(case when salario is not null then 1 else 0 end)
-    from {{ ref('jobs') }}
-    group by origem, (data_coleta at time zone 'America/Sao_Paulo')::date
-
-    union all
-
-    select
-        origem,
+        origem as fonte,
         (data_coleta at time zone 'America/Sao_Paulo')::date,
         'modalidade',
         count(*),
@@ -53,7 +42,7 @@ with campos as (
     union all
 
     select
-        origem,
+        origem as fonte,
         (data_coleta at time zone 'America/Sao_Paulo')::date,
         'senioridade',
         count(*),
@@ -64,7 +53,7 @@ with campos as (
     union all
 
     select
-        origem,
+        origem as fonte,
         (data_coleta at time zone 'America/Sao_Paulo')::date,
         'descricao',
         count(*),
@@ -75,7 +64,7 @@ with campos as (
     union all
 
     select
-        origem,
+        origem as fonte,
         (data_coleta at time zone 'America/Sao_Paulo')::date,
         'localizacao',
         count(*),

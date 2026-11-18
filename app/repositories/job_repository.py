@@ -15,6 +15,7 @@ logger = get_logger(__name__)
 # O PipelineService usa esses valores para montar as métricas da execução.
 SALVA = "salva"
 DUPLICADA = "duplicada"
+REVISADA = "revisada"
 ERRO = "erro"
 
 # Timeout (segundos) além do qual uma observação idêntica já gravada é
@@ -52,6 +53,8 @@ def _raw_payload_de_vaga(vaga) -> dict:
         "experiencia": vaga.experiencia,
         "escolaridade": vaga.escolaridade,
         "qtd_posicoes": vaga.qtd_posicoes,
+        "is_relevant": vaga.is_relevant,
+        "motivo_relevancia": vaga.motivo_relevancia,
     }
     # Mescla o fragmento original (ex.: HTML do card) quando o scraper o traz.
     if vaga.raw_payload:
@@ -104,12 +107,29 @@ class JobRepository:
                 {"source": origem, "source_job_id": source_job_id},
             ).fetchone()
 
+            # ── Já vimos esta vaga antes? (nova vs revista) ──────────────
+            ja_visto = existente is not None
+
             if existente is not None and existente[0] == payload_hash:
                 logger.info(
                     "Observação duplicada (mesmo payload) | fonte=%s source_job_id=%s",
                     origem, source_job_id,
                 )
                 return DUPLICADA
+
+            # ── ja_visto afeta só a métrica (nova vs revista); ambos inserem ────
+            if ja_visto:
+                logger.info(
+                    "Vaga revista (mesmo id_externo, payload diferente) | fonte=%s source_job_id=%s",
+                    origem, source_job_id,
+                )
+                return_tipo = REVISADA
+            else:
+                logger.info(
+                    "Vaga nova (primeira vez vista) | fonte=%s source_job_id=%s",
+                    origem, source_job_id,
+                )
+                return_tipo = SALVA
 
             # ── Insere nova observação bruta ─────────────────────────────
             session.execute(
@@ -120,7 +140,7 @@ class JobRepository:
                          payload_hash, raw_payload, is_relevant)
                     VALUES
                         (:run_id, :source, :source_job_id, :collected_at,
-                         :payload_hash, :raw_payload::jsonb, :is_relevant)
+                         :payload_hash, CAST(:raw_payload AS jsonb), :is_relevant)
                     """
                 ),
                 {
@@ -129,8 +149,8 @@ class JobRepository:
                     "source_job_id": source_job_id,
                     "collected_at": collected_at,
                     "payload_hash": payload_hash,
-                    "raw_payload": json.dumps(raw_payload, ensure_ascii=False),
-                    "is_relevant": True,
+                    "raw_payload": json.dumps(raw_payload, ensure_ascii=False, default=str),
+                    "is_relevant": vaga.is_relevant,
                 },
             )
             session.commit()
@@ -139,7 +159,7 @@ class JobRepository:
                 "Salva raw.job_observations: %s | fonte=%s | hash=%s",
                 vaga.titulo, origem, payload_hash[:12],
             )
-            return SALVA
+            return return_tipo
 
         except IntegrityError as erro:
             session.rollback()

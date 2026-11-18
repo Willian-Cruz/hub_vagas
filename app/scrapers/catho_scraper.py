@@ -9,7 +9,6 @@ from bs4 import BeautifulSoup
 from schemas.job_schema import JobSchema
 from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
 from scrapers.catho_parser import parse_cards
-from services.seniority_service import classificar_senioridade
 from utils.text_utils import valor_ou_none
 
 

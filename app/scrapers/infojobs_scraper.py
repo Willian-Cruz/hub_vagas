@@ -19,7 +19,6 @@ from constants.selectors import (
 )
 from schemas.job_schema import JobSchema
 from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
-from services.seniority_service import classificar_senioridade
 from utils.date_utils import parse_data_infojobs
 from utils.text_utils import normalizar_espacos, valor_ou_none
 
@@ -150,9 +149,8 @@ class InfoJobsScraper(BaseScraper):
             descricao = cls._extrair_descricao(card)
             experiencia = metadados.get("experiencia")
 
-            senioridade = classificar_senioridade(
-                titulo, experiencia=experiencia, descricao=descricao
-            )
+            senioridade_nivel = None
+            senioridade_origem = None
 
             vagas.append(
                 JobSchema(
@@ -162,7 +160,7 @@ class InfoJobsScraper(BaseScraper):
                         if empresa_el is not None
                         else None
                     ),
-                    senioridade=senioridade.nivel,
+                    senioridade=senioridade_nivel,
                     localizacao=cls._extrair_local(card),
                     descricao=descricao,
                     salario=metadados.get("salario"),
@@ -170,7 +168,7 @@ class InfoJobsScraper(BaseScraper):
                     origem=cls.SOURCE,
                     raw_payload={
                         "html_fragment": html_fragment,
-                        "senioridade_origem": senioridade.origem,
+                        "senioridade_origem": senioridade_origem,
                     },
                     id_externo=str(id_externo) if id_externo else None,
                     data_publicacao=(

@@ -27,23 +27,24 @@ A execução é em **lote (batch)**: uma vez por dia via APScheduler, ou manualm
 
 ```mermaid
 flowchart LR
-    A[Portais de vagas<br/>Vagas.com · InfoJobs · Gupy] --> B[Scrapers<br/>Playwright / requests + BeautifulSoup<br/>filtro de relevância]
-    B --> C[(Raw<br/>tabela jobs - landing zone)]
-    C -->|dbt build| D[Bronze<br/>scrape_runs - snapshots]
-    D -->|dbt build| E[Silver<br/>NULL · padronização · deduplicação]
-    E -->|dbt build| F[Gold<br/>marts analíticos]
-    F --> G[Exportação<br/>Excel .xlsx]
-    G --> H[Dashboard<br/>Power BI]
+    A[Portais de vagas<br/>Vagas.com · InfoJobs · Gupy · Catho] --> B[Scrapers<br/>Playwright / requests + BeautifulSoup<br/>filtro de relevância + contrato NULL]
+    B --> C[(Raw<br/>raw.job_observations - payload bruto JSONB)]
+    C -->|dbt build| D[Silver<br/>NULL · padronização · dedup]
+    D -->|dbt build| E[Gold<br/>marts analíticos]
+    E --> F[Exportação<br/>Excel .xlsx]
+    F --> G[Dashboard<br/>Power BI]
+    B -.-> H[Bronze<br/>scrape_runs - metadado de execução<br/>não é camada de dados]
+    H -->|alimenta| I[mart_status_fontes]
 ```
 
 | Etapa | Onde fica | O que faz |
 | --- | --- | --- |
-| **Ingestão** | `app/main.py`, `app/services/pipeline_service.py`, `app/services/collector_service.py` | Roda cada scraper em sequência (a falha de um não interrompe os outros), grava vagas brutas na tabela raw `jobs` (dedup por link / origem+id_externo) e registra status de execução em `bronze.scrape_runs`. Sem normalização de negócio. |
+| **Ingestão** | `app/main.py`, `app/services/pipeline_service.py`, `app/services/collector_service.py` | Roda cada scraper em sequência (a falha de um não interrompe os outros), grava vagas brutas na raw `raw.job_observations` (dedup por `origem` + `id_externo` + `payload_hash`) e registra status de execução em `bronze.scrape_runs`. O Python aplica o contrato de NULL (placeholders viram `None`), o filtro de relevância por título e, no InfoJobs, a senioridade em cascata; a normalização e dedup de negócio ficam no dbt. |
 | **Relevância** | `app/services/relevance_service.py` | No Vagas.com e no InfoJobs, descarta a vaga cujo **título** não cita nenhum termo de dados (palavra inteira). A contagem de descartadas vai para o log e para as métricas. |
-| **Raw** | `app/database/job_model.py`, `app/repositories/job_repository.py` | Tabela `jobs` (schema público): landing zone com dados brutos dos scrapers. Duplicada = mesmo link, ou mesmo ID no portal (`origem` + `id_externo`). |
-| **Bronze** | `dbt/models/staging/`, `dbt/models/marts/mart_status_fontes.sql` | Executado via `python app/transform.py`. Snapshot imutável de execução por fonte em `bronze.scrape_runs` para monitoramento de freshness. |
-| **Silver** | `dbt/models/intermediate/jobs.sql`, `dbt/macros/` | Executado via `python app/transform.py`. Campo sem informação é `NULL`, nunca "Não informado". Padroniza senioridade, localidade e modalidade, identifica o salário divulgado e mantém uma vaga por ID no portal. A mesma vaga republicada com outro ID é juntada (portal + título + empresa + local). |
-| **Gold** | `dbt/models/marts/` | Executado via `python app/transform.py`. `mart_vagas` (base do Excel), `mart_vagas_por_dia`, `mart_vagas_por_origem_localidade`, `mart_demanda_tecnologias` e `mart_status_fontes`. |
+| **Raw** | `app/database/job_model.py`, `app/repositories/job_repository.py` | Tabela `raw.job_observations` (landing zone, append-only): payload bruto de cada coleta com `raw_payload` JSONB, `payload_hash` e `is_relevant`. A tabela pública `public.jobs` é mantida como legado (migração 004); não é mais gravada pelo Python. Duplicada = mesmo `payload_hash` para a mesma `(origem, id_externo)`. |
+| **Bronze** | `app/repositories/bronze_repository.py` | Executado via `python app/main.py`. Snapshot imutável de execução por fonte em `bronze.scrape_runs` para monitoramento de freshness (fonte `bronze` no dbt). |
+| **Silver** | `dbt/models/staging/`, `dbt/models/intermediate/`, `dbt/macros/` | Executado via `python app/transform.py`. Campo sem informação é `NULL`, nunca "Não informado". Padroniza senioridade, localidade e modalidade, identifica o salário divulgado e mantém todas as linhas com `dedup_group_id` + `is_canonical` (marts usam só as canônicas). |
+| **Gold** | `dbt/models/marts/` | Executado via `python app/transform.py`. 7 marts: `mart_vagas` (base do Excel), `mart_vagas_por_dia`, `mart_vagas_por_origem_localidade`, `mart_demanda_tecnologias`, `mart_status_fontes`, `mart_salarios` e `mart_qualidade_campos`. |
 | **Orquestração** | `app/main.py`, `app/scheduler.py`, `app/services/scheduler_service.py` | Apenas ingestão: coleta e gravação na raw `jobs`. A transformação é disparada separadamente via `transform.py`. |
 | **Transformação** | `app/transform.py`, `app/run_dbt.py` | Ponto de entrada para o dbt. Executa `dbt build` que move dados da raw para Bronze → Silver → Gold. |
 | **Exportação** | `app/services/export_service.py`, `app/export_excel.py` | Gera `data/exports/vagas.xlsx` a partir de `gold.mart_vagas`. |
@@ -101,11 +102,13 @@ Fluxo de transformação pelo dbt:
 
 ```mermaid
 flowchart LR
-    Raw[(jobs<br/>raw layer)] --> Bronze[(bronze.scrape_runs<br/>monitoramento)]
-    Bronze --> Silver[(silver.jobs<br/>normalização + dedupe)]
+    Raw[(raw.job_observations<br/>raw layer - payload bruto)]
+    --> Silver[(silver.jobs<br/>normalização + dedup)]
     Silver --> Gold[(gold.mart_*<br/>analytics)]
     Gold --> Excel[Excel .xlsx]
     Gold --> BI[Power BI]
+    Bronze[(bronze.scrape_runs<br/>metadado de execução)]
+    -.-> I[mart_status_fontes]
 ```
 
 ---
@@ -204,7 +207,7 @@ Vagas Silver enriquecidas com tecnologias.
 
 - **Campo sem informação é `NULL`.** Os scrapers do Vagas.com e do InfoJobs já devolvem `None` para "Confidencial", "Localização não informada" e similares, e a Silver trata os mesmos textos vindos de qualquer fonte. No Power BI, trate `NULL` como "(Em branco)".
 - **Relevância.** Os portais buscam por palavras soltas, então "engenheiro de dados" também devolve engenharia civil e vendas. A vaga só passa se o título citar um termo de `dbt/seeds/termos_relevancia.csv` (dados, data, analytics, BI, ETL, dbt, SQL, Python, Spark, Airflow, Databricks, Snowflake, BigQuery e outros), como palavra inteira. As descartadas não chegam ao raw; só a contagem é registrada. A Gupy busca por termos próprios e ainda não passa por esse filtro.
-- **Deduplicação.** Na raw `jobs`: dedup por `link` (UNIQUE) e por `(origem, id_externo)`. Na Silver: uma vaga por `id_externo` (sem ele, pelo link), mantendo a observação mais recente, e uma vaga por portal + título + empresa + local, sem acento nem diferença de caixa. A chave de conteúdo só existe quando empresa e local são conhecidos, para não juntar vagas diferentes.
+- **Deduplicação.** Na raw `raw.job_observations`: dedup por `(origem, id_externo)` + `payload_hash` (mesmo payload não é regravado). Na Silver: todas as linhas são mantidas com `dedup_group_id` e `is_canonical`; os marts usam apenas as linhas canônicas. Uma vaga republicada com outro ID é agrupada por portal + título + empresa + local (chave de conteúdo). A dedup é por portal, então a mesma vaga em dois portais conta duas vezes.
 - **Senioridade.** O nível do portal tem prioridade. Sem ele, o `seniority_service` testa as evidências abaixo, em ordem, e fica com a primeira que acerta:
   1. palavra de nível no título (mesma regra do `NormalizeService`, com algumas palavras a mais, como `mid-level` e `intern`, e sem ler "PL/SQL" ou "PL-300" como Pleno);
   2. nível escrito na descrição, como "Nível: Pleno" ou "Analista de Dados Sênior";
@@ -251,10 +254,24 @@ hub_vagas/
 ├── dbt/
 │   ├── macros/                # normalização de campos, tecnologias monitoradas, nomes de schema, select_raw_jobs
 │   ├── models/                # sources.yml (raw + bronze), staging/, intermediate/ (Silver) e marts/ (Gold)
+│   │   ├── sources.yml        # Fontes: raw.jobs + raw_observations.job_observations + bronze.scrape_runs
+│   │   ├── staging/           # Views por fonte (stg_*_jobs), lê de raw_observations.job_observations
+│   │   ├── intermediate/      # Silver: int_jobs_unioned → int_jobs_normalized → int_jobs_deduped → silver.jobs
+│   │   └── marts/             # Gold: 7 marts (mart_vagas, mart_vagas_por_dia,
+│   │   │                      # mart_vagas_por_origem_localidade, mart_demanda_tecnologias,
+│   │   │                      # mart_status_fontes, mart_salarios, mart_qualidade_campos)
+│   ├── seeds/                 # tecnologias_monitoradas.csv e termos_relevancia.csv (fonte única)
 │   ├── tests/                 # testes de dados: unicidade da Silver e contrato de NULL
 │   ├── dbt_project.yml
 │   └── profiles.yml.example   # perfil sem segredos
-├── infra/migrations/          # SQL para bancos criados por versões anteriores (001 a 004)
+├── infra/migrations/          # SQL para bancos criados por versões anteriores (001 a 007)
+│   ├── 001_job_technologies_primary_key.sql
+│   ├── 002_jobs_data_coleta.sql
+│   ├── 003_bronze_layer.sql
+│   ├── 004_jobs_novos_campos.sql
+│   ├── 005_drop_bronze_job_observations.sql
+│   ├── 006_raw_job_observations.sql
+│   └── 007_schema_migrations.sql
 ├── .env.example
 ├── requirements.txt
 └── LICENSE
@@ -269,7 +286,7 @@ hub_vagas/
 | Vagas.com | Playwright (scroll infinito) + BeautifulSoup | Implementado: ID, data de publicação, posições, local, nível e descrição do card. Salário só na página de detalhe |
 | InfoJobs | requests + BeautifulSoup, paginado | Implementado: salário, experiência, escolaridade, modalidade, data exata, ID e senioridade em cascata (título, descrição e experiência) |
 | Gupy | Playwright + BeautifulSoup, por termos de busca | Implementado, com calibração de seletores pendente (`app/scrapers/gupy_scraper.py`). Ainda não usa o filtro de relevância nem devolve `NULL`; a Silver trata os textos "Não informado" |
-| Catho | — | Parser dos cards pronto e testado com HTML real (`app/scrapers/catho_parser.py`): empresa, local, posições, salário, data e senioridade pelo título. Falta o scraper (busca, paginação e coleta). Scripts de verificação de qualidade: `check_catho.py`, `check_silver_catho.py` |
+| Catho | requests + BeautifulSoup, paginado, por termo de busca | Implementado: scraper `CathoScraper` ativo (`app/scrapers/catho_scraper.py`) + parser `catho_parser.py` testado com HTML real. Empresa, local, posições, salário (`R$`, "A Combinar", "A partir de..."), data de publicação/atualização e senioridade pelo título. Card não traz descrição, experiência, escolaridade nem modalidade. Salva `raw_payload` (fragmento HTML) em `raw.job_observations`. Scripts de verificação: `check_catho.py`, `check_silver_catho.py` |
 | Remotar, Sólides | — | Próximos (mesmo contrato dos scrapers atuais) |
 | LinkedIn, Indeed, Glassdoor | — | Planejados |
 
@@ -405,10 +422,10 @@ O `app/run_dbt.py` lê o `.env` e configura a conexão a partir de `DATABASE_URL
 
 | Camada | Origem | Modelos | Materialização |
 | --- | --- | --- | --- |
-| Raw | scrapers → `jobs` | tabela `jobs` (schema público) | tabela |
+| Raw | scrapers → `raw.job_observations` | tabela `raw.job_observations` (schema raw) + legado `public.jobs` | tabela |
 | Bronze | `bronze.scrape_runs` | tabela `scrape_runs` (schema bronze) | tabela |
-| Silver | raw `jobs` → `silver.jobs` | `stg_*`, `jobs` | view / tabela |
-| Gold | Silver → `gold.mart_vagas` | `mart_vagas` | tabela |
+| Silver | raw `raw.job_observations` → `silver.jobs` | `stg_*`, `int_jobs_*`, `jobs` | view / tabela |
+| Gold | Silver → `gold.mart_*` | 7 marts (`mart_vagas`, `mart_vagas_por_dia`, `mart_vagas_por_origem_localidade`, `mart_demanda_tecnologias`, `mart_status_fontes`, `mart_salarios`, `mart_qualidade_campos`) | tabela |
 
 Os demais marts Gold (`mart_vagas_por_dia`, `mart_vagas_por_origem_localidade`, `mart_demanda_tecnologias`, `mart_status_fontes`, `mart_salarios`, `mart_qualidade_campos`) estão ativos e disponíveis para consumo direto pelo Power BI ou por outras ferramentas de BI.
 
@@ -473,7 +490,7 @@ O GitHub Actions roda o `pytest` a cada push e pull request na `main`. O `dbt bu
 | 11 | Camadas Bronze, Silver e Gold: coleta append-only em JSONB, transformações e testes de dados com dbt, exportação a partir do mart Gold e tabela `jobs` mantida como legado |
 | 12 (nov/2026) | Revisão dos scrapers do Vagas.com e InfoJobs com HTML real: campos vazios viram `NULL`, novos campos, filtro de relevância, deduplicação por ID e conteúdo (migração `004`). No dbt, `NULL`, campos novos e deduplicação na Silver. Correções na gravação Bronze, no `run_dbt.py` e na exportação para Excel |
 | 13 (nov/2026) | Senioridade em cascata (portal, título, descrição e experiência), com a origem registrada na Bronze; parser da Catho testado com HTML real; correções no InfoJobs: modalidade lida pelos três ícones do card (antes só "Presencial") e fragmento HTML original preservado na Bronze |
-| 14 (nov/2026) | **Arquitetura medallion com `jobs` como raw**: `main.py` executa apenas scrape → raw `jobs`; `transform.py` executa dbt build (raw → Bronze → Silver → Gold); `scheduler.py` desacoplado do dbt; `PipelineService` grava na raw `jobs` e em `bronze.scrape_runs`; dbt lê da raw `jobs` (não mais do JSONB do Bronze) |
+| 14 (nov/2026) | **Arquitetura medallion com `raw.job_observations` como raw**: `main.py` executa apenas scrape → raw `raw.job_observations` (payload bruto JSONB + `is_relevant`); `transform.py` executa dbt build (`raw_observations.job_observations` → Silver → Gold); `bronze.scrape_runs` é metadado de execução (não camada de dados); `scheduler.py` desacoplado do dbt; `PipelineService` grava em `raw.job_observations` e `bronze.scrape_runs`; `public.jobs` mantida como legado da migração `004` |
 | 15 (nov/2026) | Coleta e parser da Catho com HTML real, senioridade por título, staging `stg_catho_jobs` no dbt, scripts de verificação de qualidade (`check_*.py`), ajustes na macro `classify_seniority_cascade` e testes de NULL na Silver |
 
 ---
@@ -484,7 +501,7 @@ O GitHub Actions roda o `pytest` a cada push e pull request na `main`. O `dbt bu
 - Corrigir a senioridade lida pelo pipeline (`NormalizeService` e macro `normalize_seniority`): "PL/SQL" e "PL-300" viram Pleno, e o rótulo "Liderança" não é reconhecido quando já vem pronto do scraper
 - Buscar a página de detalhe da vaga (descrição completa e salário) nos portais que só mostram um resumo no card; a senioridade inferida pela descrição também ganha com isso
 - Transformar o parser da Catho em scraper (busca, paginação, coleta), adicionar Remotar e Sólides, e depois LinkedIn, Indeed e Glassdoor
-- Migrar o `AnalyticsService` para a Gold e aposentar a tabela `jobs`
+- Confirmar se o `AnalyticsService` existe e migrá-lo para a Gold ou removê-lo
 - Publicar prints do dashboard do Power BI neste README
 
 ---

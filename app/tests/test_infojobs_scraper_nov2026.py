@@ -24,7 +24,6 @@ from bs4 import BeautifulSoup
 
 from constants.selectors import INFOJOBS_JOB_CARD
 from scrapers.infojobs_scraper import InfoJobsScraper
-from services.normalize_service import NormalizeService
 from utils.text_utils import normalizar_espacos
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -137,6 +136,24 @@ def test_modalidade_tem_um_icone_para_cada_valor(vagas):
     assert vagas["12210878"].modalidade == "Presencial"   # icon-buildings
 
 
+def _card(titulo, *, data_id="1", chips=(), local="São Paulo - SP", descricao="Descrição da vaga.") -> str:
+    itens = "".join(
+        f'<div><svg class="icon {icone} icon-size-16"><use xlink:href="#x"></use></svg> {texto} </div>'
+        for icone, texto in chips
+    )
+    return (
+        f'<div class="js_vacancyLoad js_rowCard" data-id="{data_id}" data-href="/vaga-x__{data_id}.aspx">'
+        '<div class="js_date" data-value="2026/11/11 05:15:00" hidden=""></div>'
+        f'<a href="/vaga-x__{data_id}.aspx"><h2 class="js_vacancyTitle">{titulo}</h2></a>'
+        '<div class="d-flex align-items-baseline"><div class="text-body"><a href="/empresa-x">Empresa X</a></div></div>'
+        f'<div class="mb-8">{local}<span class="js_divUserVagaDistance" hidden="">, '
+        '<span class="js_UserVagaDistance" data-vagalatitude="-23.6" data-vagalongitude="-46.6">0</span> Km de você.</span></div>'
+        f'<div class="d-inline-flex flex-wrap mb-8 text-medium">{itens}</div>'
+        f'<div class="text-medium">{descricao}</div>'
+        "</div>"
+    )
+
+
 @pytest.mark.parametrize(
     "icone, texto",
     [
@@ -197,26 +214,14 @@ def test_nenhum_texto_inventado(vagas, campo):
 
 
 def test_senioridade_em_cascata_nas_20_vagas(vagas):
-    assert set(vagas) == set(SENIORIDADE_ESPERADA)
-    for id_, (nivel, origem) in SENIORIDADE_ESPERADA.items():
-        assert vagas[id_].senioridade == nivel, id_
-        assert vagas[id_].raw_payload["senioridade_origem"] == origem, id_
+    # Senioridade agora é computada no dbt (Silver), não no scraper.
+    assert all(v.senioridade is None for v in vagas.values())
+    assert all(v.raw_payload["senioridade_origem"] is None for v in vagas.values())
 
 
 def test_cobertura_de_senioridade(vagas):
-    por_origem = Counter(v.raw_payload["senioridade_origem"] for v in vagas.values())
-    assert por_origem == {"titulo": 9, "experiencia_campo": 5, None: 6}
-
-
-def test_titulos_reais_dao_o_mesmo_nivel_do_pipeline(vagas):
-    """Quando a cascata usa o título, o nível é o do NormalizeService; quando não usa, o pipeline
-    também não acha nível no título (senão a cascata passaria por cima de um título que tem nível)."""
-    for vaga in vagas.values():
-        do_pipeline = NormalizeService.normalizar_senioridade(vaga.titulo, de_titulo=True)
-        if vaga.raw_payload["senioridade_origem"] == "titulo":
-            assert vaga.senioridade == do_pipeline, vaga.titulo
-        else:
-            assert do_pipeline is None, vaga.titulo
+    # Sem senioridade no scraper: todas None.
+    assert all(v.raw_payload["senioridade_origem"] is None for v in vagas.values())
 
 
 def test_senioridade_nunca_e_o_texto_do_campo_de_experiencia(vagas):
@@ -224,62 +229,6 @@ def test_senioridade_nunca_e_o_texto_do_campo_de_experiencia(vagas):
     assert not any("anos" in (v.senioridade or "") for v in vagas.values())
 
 
-# ---------------------------------------------------------- cascata, cards sintéticos
-
-
-def _card(titulo, *, data_id="1", chips=(), local="São Paulo - SP", descricao="Descrição da vaga.") -> str:
-    itens = "".join(
-        f'<div><svg class="icon {icone} icon-size-16"><use xlink:href="#x"></use></svg> {texto} </div>'
-        for icone, texto in chips
-    )
-    return (
-        f'<div class="js_vacancyLoad js_rowCard" data-id="{data_id}" data-href="/vaga-x__{data_id}.aspx">'
-        '<div class="js_date" data-value="2026/11/11 05:15:00" hidden=""></div>'
-        f'<a href="/vaga-x__{data_id}.aspx"><h2 class="js_vacancyTitle">{titulo}</h2></a>'
-        '<div class="d-flex align-items-baseline"><div class="text-body"><a href="/empresa-x">Empresa X</a></div></div>'
-        f'<div class="mb-8">{local}<span class="js_divUserVagaDistance" hidden="">, '
-        '<span class="js_UserVagaDistance" data-vagalatitude="-23.6" data-vagalongitude="-46.6">0</span> Km de você.</span></div>'
-        f'<div class="d-inline-flex flex-wrap mb-8 text-medium">{itens}</div>'
-        f'<div class="text-medium">{descricao}</div>'
-        "</div>"
-    )
-
-
-def _vaga(titulo, *, experiencia=None, descricao="Descrição da vaga."):
-    chips = [("icon-suitcase", experiencia)] if experiencia else []
-    jobs, _, _ = InfoJobsScraper._parsear_detalhado(_card(titulo, chips=chips, descricao=descricao).encode())
-    return jobs[0]
-
-
-@pytest.mark.parametrize(
-    "titulo, experiencia, descricao, nivel, origem",
-    [
-        # o título manda, mesmo com experiência e descrição apontando para outro nível
-        ("Analista de Dados Sênior", "Entre 1 e 3 anos", "Vaga para analista júnior.", "Sênior", "titulo"),
-        ("Analista de Dados Jr", "Entre 5 e 10 anos", None, "Júnior", "titulo"),
-        # sem nível no título, vale o nível escrito na descrição...
-        ("Analista de Dados", "Entre 1 e 3 anos", "Procuramos Analista Sênior para o time.", "Sênior", "descricao_nivel"),
-        # ...depois o campo de experiência
-        ("Analista de Dados", "Entre 1 e 3 anos", "Descrição da vaga.", "Júnior", "experiencia_campo"),
-        ("Analista de Dados", "Entre 3 e 5 anos", "Descrição da vaga.", "Pleno", "experiencia_campo"),
-        ("Analista de Dados", "Entre 5 e 10 anos", "Descrição da vaga.", "Sênior", "experiencia_campo"),
-        ("Analista de Dados", "Mais de 10 anos", "Descrição da vaga.", "Sênior", "experiencia_campo"),
-        ("Auxiliar Administrativo", "Sem experiência", "Descrição da vaga.", "Júnior", "experiencia_campo"),
-        ("Auxiliar Administrativo", "Só estágios", "Descrição da vaga.", "Estágio/Trainee", "experiencia_campo"),
-        # por último, "N anos de experiência" escrito na descrição
-        ("Analista de Dados", None, "Requisitos: 5+ anos de experiência com SQL.", "Sênior", "descricao_anos"),
-        # sem nenhuma evidência: NULL, nunca um palpite
-        ("Analista de Dados", None, "Descrição da vaga.", None, None),
-        ("Desenvolvedor PL/SQL", None, "Descrição da vaga.", None, None),
-    ],
-)
-def test_cascata_de_senioridade(titulo, experiencia, descricao, nivel, origem):
-    vaga = _vaga(titulo, experiencia=experiencia, descricao=descricao)
-    assert vaga.senioridade == nivel
-    assert vaga.raw_payload["senioridade_origem"] == origem
-
-
-def test_a_experiencia_continua_guardada_como_veio_do_portal():
-    vaga = _vaga("Analista de Dados", experiencia="Entre 3 e 5 anos")
-    assert vaga.experiencia == "Entre 3 e 5 anos"
-    assert vaga.senioridade == "Pleno"
+# ---------------------------------------------------------- FIM dos testes de senioridade
+# (a classificação de senioridade agora vive no dbt; veja
+#  dbt/tests/assert_normalize_seniority.sql e dbt/tests/assert_seniority_cascade.sql)

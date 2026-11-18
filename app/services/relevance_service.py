@@ -32,9 +32,16 @@ class RelevanceService:
         return re.search(padrao, texto) is not None
 
     @classmethod
-    def separar(cls, vagas) -> tuple[list, list]:
-        """Devolve (relevantes, descartadas), preservando a ordem."""
-        relevantes, descartadas = [], []
+    def separar(cls, vagas) -> list:
+        """Marca is_relevant/motivo_relevancia em cada vaga e devolve todas.
+
+        Não descarta nenhuma: a Silver (dbt) filtra is_relevant = true nos marts.
+        """
         for vaga in vagas:
-            (relevantes if cls.eh_relevante(vaga.titulo) else descartadas).append(vaga)
-        return relevantes, descartadas
+            if cls.eh_relevante(vaga.titulo):
+                vaga.is_relevant = True
+                vaga.motivo_relevancia = None
+            else:
+                vaga.is_relevant = False
+                vaga.motivo_relevancia = "titulo_sem_termo_de_dados"
+        return vagas

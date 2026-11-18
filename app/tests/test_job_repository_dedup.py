@@ -16,8 +16,9 @@ from unittest.mock import MagicMock, patch
 
 from repositories.job_repository import (
     JobRepository,
-    SALVA,
     DUPLICADA,
+    REVISADA,
+    SALVA,
     _payload_hash,
     _raw_payload_de_vaga,
 )
@@ -64,12 +65,12 @@ class TestDedupPorHash:
         assert session.execute.call_count == 1  # apenas o SELECT de dedup
         session.commit.assert_not_called()
 
-    def test_hash_diferente_para_mesma_vaga_e_salva(self):
+    def test_hash_diferente_para_mesma_vaga_e_revisada(self):
         vaga = _vaga()
         session_class, session = _mock_session(fetchone_return=("hash-antigo",))
 
         with patch("repositories.job_repository.SessionLocal", session_class):
-            assert JobRepository.salvar(vaga) == SALVA
+            assert JobRepository.salvar(vaga) == REVISADA
 
         session.commit.assert_called_once()
 

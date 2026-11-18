@@ -46,15 +46,18 @@ class CollectorService:
                         f"recebido: {type(resultado).__name__}"
                     )
 
-                # Aplicar filtro de relevância centralizado
-                relevantes, descartadas = RelevanceService.separar(resultado.jobs)
+                # Aplicar filtro de relevância centralizado: marca is_relevant
+                # em cada vaga sem descartar (a Silver filtra nos marts).
+                vagas_marcadas = RelevanceService.separar(resultado.jobs)
+                n_relevantes = sum(1 for v in vagas_marcadas if v.is_relevant)
+                n_descartadas = len(vagas_marcadas) - n_relevantes
                 resultado = ScrapeResult(
                     source=resultado.source,
                     status=resultado.status,
-                    jobs=relevantes,
+                    jobs=vagas_marcadas,
                     pages_processed=resultado.pages_processed,
                     error=resultado.error,
-                    discarded=(resultado.discarded or 0) + len(descartadas),
+                    discarded=(resultado.discarded or 0) + n_descartadas,
                 )
 
                 resultados.append(resultado)

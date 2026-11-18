@@ -12,16 +12,22 @@ models:
         tests: [not_null]
       - name: descricao_truncada
   - name: mart_salarios
-    description: "Cobertura salarial por origem: total de vagas, vagas com salário e percentual."
+    description: "Cobertura salarial por origem e senioridade: total, n_com_salario, percentual, média e mediana."
     columns:
       - name: origem
         tests: [not_null]
+      - name: senioridade
+        tests: [not_null]
       - name: total_vagas
         tests: [not_null]
-      - name: vagas_com_salario
+      - name: n_com_salario
         tests: [not_null]
       - name: pct_com_salario
         tests: [not_null]
+      - name: salario_min_medio
+      - name: salario_max_medio
+      - name: salario_min_mediana
+      - name: salario_max_mediana
   - name: mart_vagas_por_dia
     description: "Volume de observações coletadas por dia e portal (lê da Silver)."
     columns:
@@ -34,6 +40,8 @@ models:
       - name: vagas_distintas
         tests: [not_null]
       - name: vagas_canonicas
+        tests: [not_null]
+      - name: pct_com_descricao_completa
         tests: [not_null]
   - name: mart_vagas_por_origem_localidade
     description: "Snapshot Silver de vagas por portal, localidade e senioridade."

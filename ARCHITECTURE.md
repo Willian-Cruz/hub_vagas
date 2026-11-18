@@ -9,12 +9,13 @@
 ```mermaid
 flowchart LR
     A[PORTALS<br/>Vagas.com · InfoJobs · Gupy · Catho] --> B[INGESTÃO<br/>Python/Playwright/requests<br/>app/main.py · app/scheduler.py]
-    B --> C[(RAW<br/>public.jobs<br/>landing zone)]
-    C --> D[BRONZE<br/>bronze.scrape_runs<br/>monitoramento append-only]
-    D --> E[SILVER<br/>silver.jobs<br/>normalização + dedup]
-    E --> F[GOLD<br/>gold.mart_*<br/>analytics]
-    F --> G[EXPORT<br/>Excel .xlsx]
-    G --> H[BI<br/>Power BI]
+    B --> C[(RAW<br/>raw.job_observations<br/>payload bruto JSONB + is_relevant])
+    C --> D[SILVER<br/>silver.jobs<br/>normalização + dedup]
+    D --> E[GOLD<br/>gold.mart_*<br/>analytics]
+    E --> F[EXPORT<br/>Excel .xlsx]
+    F --> G[BI<br/>Power BI]
+    B -.-> H[BRONZE<br/>bronze.scrape_runs<br/>metadado de execução<br/>não é camada de dados]
+    H -->|alimenta| I[mart_status_fontes]
 ```
 
 **Princípio fundamental:** Separação de responsabilidades
@@ -121,10 +122,10 @@ flowchart TD
 ```
 
 **Detalhes do `JobRepository.salvar()`:**
-1. Grava os campos conforme vieram do scraper (sem normalização de negócio).
-2. Busca duplicata por: `link` → `(origem, id_externo)` → `chave_conteudo`.
-3. Se existe: preenche apenas campos NULL (nunca sobrescreve), retorna `"duplicada"`.
-4. Se nova: INSERT + extrai tecnologias da descrição → `job_technologies`.
+1. Grava o payload bruto em `raw.job_observations` (append-only), sem normalização de negócio (senioridade, local, salário, modalidade, tecnologias ficam para o dbt).
+2. Busca duplicata por `(origem, id_externo)` + `payload_hash`: se a última observação da mesma vaga no portal tiver o mesmo payload, não insere novamente e retorna `"duplicada"`.
+3. Se nova: INSERT em `raw.job_observations` com `raw_payload`, `payload_hash`, `is_relevant` e retorna `"salva"`.
+4. Erro de persistência: rollback e retorna `"erro"`.
 
 ### 3.2 Transformação (dbt) — `dbt build`
 
@@ -166,29 +167,23 @@ flowchart TD
 
 ## 4. Modelos de Dados por Camada
 
-### 4.1 Raw — `public.jobs` (Landing Zone)
+### 4.1 Raw — `raw.job_observations` (Landing Zone, append-only)
 
 | Coluna | Tipo | Constraints | Origem |
 |--------|------|-------------|--------|
-| `id` | int | PK | Auto |
-| `titulo` | string | NOT NULL | Scraper |
-| `empresa` | string | NULL se placeholder | Scraper |
-| `senioridade` | string | NULL se placeholder | Scraper |
-| `localizacao` | string | NULL se placeholder | Scraper |
-| `descricao` | text | NULL se placeholder | Scraper |
-| `salario` | string | NULL se placeholder | Scraper |
-| `link` | string | UK, NOT NULL | Scraper |
-| `origem` | string | "Vagas.com"\|"InfoJobs"\|"Gupy"\|"Catho" | Scraper |
-| `data_coleta` | datetime | NOT NULL, default now() | Pipeline |
-| `id_externo` | string | UK com origem | Scraper (regex do link) |
-| `data_publicacao` | datetime | | Scraper |
-| `modalidade` | string | | Scraper |
-| `experiencia` | string | | Scraper |
-| `escolaridade` | string | | Scraper |
-| `qtd_posicoes` | int | | Scraper |
-| `chave_conteudo` | string | INDEX | Repository (normalizada) |
+| `id` | bigserial | PK | Auto |
+| `run_id` | uuid | NOT NULL | Pipeline (UUID da execução) |
+| `source` | text | NOT NULL | Scraper (Vagas.com, InfoJobs, Gupy, Catho) |
+| `source_job_id` | text | | Scraper (id_externo, pode ser NULL) |
+| `collected_at` | timestamptz | NOT NULL | Pipeline |
+| `payload_hash` | text | NOT NULL | Repository (SHA-256 do raw_payload) |
+| `raw_payload` | jsonb | NOT NULL | Scraper (payload bruto, sem normalização) |
+| `is_relevant` | boolean | NOT NULL DEFAULT true | RelevanceService (filtro por título) |
+| `created_at` | timestamptz | NOT NULL DEFAULT now() | Pipeline |
 
-**Dedup Raw**: `UNIQUE(link)` + `UNIQUE(origem, id_externo)`
+**Dedup Raw**: mesma `(source, source_job_id)` + `payload_hash` não é regravada (última observação vence).
+
+A tabela pública `public.jobs` é mantida como legado (migração `004`); não é mais gravada pelo Python. O dbt lê de `raw.job_observations` através da fonte `raw_observations.job_observations`.
 
 ### 4.2 Bronze — `bronze.scrape_runs` (Monitoramento)
 
@@ -226,19 +221,19 @@ flowchart TD
 | `chave_conteudo` | string | Dedup cross-portal |
 | `data_coleta` | datetime | |
 
-**Dedup Silver (2-pass):**
-1. `PARTITION BY origem, chave_portal` → latest por ID portal
-2. `PARTITION BY chave_conteudo` → latest por conteúdo (título+empresa+local)
+**Dedup Silver:** todas as linhas são mantidas (nenhuma apagada); cada grupo de conteúdo recebe `dedup_group_id`, `first_seen_at`/`last_seen_at` e `is_canonical` (linha mais recente do grupo). Os marts usam apenas `is_canonical = true`. A dedup é por portal: a mesma vaga em dois portais conta duas vezes.
 
 ### 4.4 Gold — Marts Analíticos
 
 | Mart | Granularidade | Uso |
 |------|---------------|-----|
-| `mart_vagas` | 1 linha/vaga | Export Excel, Power BI |
+| `mart_vagas` | 1 linha/vaga (canônicas) | Export Excel, Power BI |
 | `mart_vagas_por_dia` | (data, origem) | Tendência volume |
 | `mart_vagas_por_origem_localidade` | (origem, local, senioridade) | Heatmap geo/sênior |
 | `mart_demanda_tecnologias` | tecnologia | Ranking techs |
 | `mart_status_fontes` | origem | Monitoramento freshness |
+| `mart_salarios` | origem | Cobertura salarial |
+| `mart_qualidade_campos` | (fonte, campo) | Saúde do parser por campo |
 
 ---
 

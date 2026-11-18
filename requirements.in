@@ -7,6 +7,5 @@ pydantic
 pandas
 python-dotenv
 openpyxl
-pytest
 APScheduler
 dbt-postgres

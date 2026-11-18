@@ -401,11 +401,24 @@ cd app
 pytest tests/ -m "not integration" -q --tb=short
 ```
 
-A suíte usa um mock global do banco (`conftest.py`), então roda sem PostgreSQL. Os parsers do Vagas.com, InfoJobs e Catho são testados contra **HTML real** dos portais (`app/tests/fixtures/`).
+Testes de integração (requerem PostgreSQL):
 
-O GitHub Actions roda o `pytest` com banco real (`services: postgres`) e o `dbt build` a cada push/PR na `main`. Execute `dbt build` localmente com `python app/transform.py`.
+```bash
+cd app
+pytest tests/integration/ -m integration -q --tb=short
+```
 
-**Última validação:** dbt build **PASS=164, WARN=4, ERROR=0, SKIP=0**; pytest **290 passed**.
+A suíte de unidade usa um mock global do banco (`conftest.py`), então roda sem PostgreSQL. Os parsers do Vagas.com, InfoJobs e Catho são testados contra **HTML real** dos portais (`app/tests/fixtures/`).
+
+O GitHub Actions roda, a cada push/PR na `main`:
+1. Testes unitários (sem banco)
+2. Testes de integração com `services: postgres`
+3. `dbt build` com PostgreSQL (valida modelos e testes de dados)
+4. Lint com ruff (bloqueia merge em falha)
+5. Detecção de secrets com detect-secrets
+6. Scan de vulnerabilidades com pip-audit
+
+**Última validação:** dbt build **PASS=181, WARN=6, ERROR=0, SKIP=0**; pytest **319 passed** (1 falha pré-existente `test_migrate.py`).
 
 ---
 
@@ -430,6 +443,44 @@ O GitHub Actions roda o `pytest` com banco real (`services: postgres`) e o `dbt 
 | 17 (nov/2026) | **Fase 2 — Qualidade automática**: source freshness com `filter` em `bronze.scrape_runs`; limiares em `vars:` do `dbt_project.yml`; testes de desvio de qualidade vs mediana 7d e volume vs média semanal; `check_*.py` removidos da raiz (lógica em testes dbt); `data_publicacao` como `timestamptz` (UTC); `data_atualizacao` para Catho; teste de contrato Python↔dbt |
 | 18 (nov/2026) | **Fase 3 — Operação, CI, segurança e compliance**: Windows Task Scheduler (XML + PowerShell); notificação de falha (webhook/e-mail); retry com backoff; advisory lock; `schema_migrations` + `migrate.py`; role `bi_reader` + `+grants` no dbt; `docs/compliance.md`; CI com `services: postgres`, pytest integration, ruff, pre-commit, pip-tools lock (`requirements.in`) |
 | 19 (nov/2026) | **Fase 4 — Refinamentos**: `detail_url` no `JobSchema`; `fetch_detail_page` / `_merge_detail_into_vaga` no `BaseScraper`; deep scraping para Vagas.com (descrição completa + salário); guia de expansão para portais (Remotar, Sólides, LinkedIn, Indeed, Glassdoor); `AnalyticsService` auditado e funcional (consulta Gold); `.env.example` limpo (sem Cloud Run/Cloud SQL/DASHBOARD_URL); `ARCHITECTURE.md` consolidado no README |
+| 20 (nov/2026) | **Fase 3 — Qualidade, Testes e Observabilidade**: contratos de dados documentados (`docs/data_dictionary/contracts.md`, `docs/data_dictionary/data_dictionary.md`); qualidade dbt reforçada (validação salario_min<=max, precisão/recall de tecnologias, severidade documentada); testes E2E e integração (ambiente PostgreSQL isolado, migrations automáticas, cenários A-G, CI com `services: postgres` e dbt build a cada push/PR); observabilidade (logs estruturados com `run_id`, `mart_saude_pipeline` consolidado, condições de alerta documentadas); dependências e segurança (requirements.in/requirements.txt separados, requirements-dev.in/requirements-dev.txt, Dependabot, pip-audit no CI, `.github/dependabot.yml`) |
+
+---
+
+## Fase 3 — Qualidade, Testes e Observabilidade
+
+Esta fase fortaleceu o projeto com cinco melhorias (M08 a M15):
+
+### M08 — Testes de integração e ponta a ponta
+- Ambiente de teste isolado com PostgreSQL (`app/tests/integration/conftest.py`)
+- Migrations aplicadas automaticamente antes dos testes
+- Testes de persistência (`test_persistence.py`): inserção, dedup, payload JSONB, linhagem
+- Testes E2E (`test_e2e.py`): cenários A–G (sucesso, dados incompletos, duplicidade, fonte indisponível, banco indisponível, falha de transformação, alteração na fonte)
+- CI executa dbt build em todo push/PR (não apenas schedule semanal)
+
+### M11 — Qualidade dos modelos dbt
+- `assert_salario_valido.sql`: salario_min <= salario_max, sem negativos, a_combinar sem valores, faixa com min+max
+- `assert_tecnologias_precisao_recall.sql`: precisão/recall da classificação de tecnologias com dataset rotulado (32 exemplos)
+- `assert_contrato_tipos_raw.sql`: detecção de mudanças incompatíveis em colunas da raw
+- Severidade documentada em cada teste (error para invariantes, warn para limitações conhecidas)
+
+### M13 — Observabilidade
+- Logs estruturados JSON com `run_id`, `source`, `component`, `stage`, `event`, `status`, métricas de registros (`app/utils/logger.py`, função `log_event`)
+- `mart_saude_pipeline` (Gold): visão consolidada de saúde por fonte (taxa de sucesso/falha, duração, volume, última coleta, status de saúde)
+- `assert_saude_pipeline.sql`: verifica fontes sem sucesso ou desatualizadas
+- Condições de alerta documentadas (`docs/operations/observabilidade.md`)
+
+### M14 — Contratos de dados
+- `docs/data_dictionary/contracts.md`: contratos de entrada (JobSchema), persistência (raw.job_observations), saída (Silver/Gold), semântica de NULL, datas, moeda, identificadores
+- `docs/data_dictionary/data_dictionary.md`: dicionário completo de colunas por camada
+- Política de evolução de contratos (mudanças compatíveis vs incompatíveis)
+
+### M15 — Dependências e segurança
+- `requirements.in` (produção) e `requirements-dev.in` (dev/test) separadas
+- `requirements.txt` e `requirements-dev.txt` travados via pip-compile
+- `.github/dependabot.yml`: atualizações automatizadas semanais
+- `pip-audit` no CI: scan de vulnerabilidades em ambos os lockfiles
+- `requirements.lock` removido (redundante)
 
 ---
 

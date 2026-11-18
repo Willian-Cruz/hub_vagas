@@ -1,0 +1,37 @@
+texto,tecnologia_esperada,deve_cascar
+"Desenvolvedor Python com 3 anos de experiência",python,sim
+"Vaga para engenheiro de dados Python e SQL",python,sim
+"Pythonic code is great",python,não
+"Conhecimento avançado em SQL Server",sql,sim
+"PL/SQL para banco de dados Oracle",sql,não
+"PL-300 certification for Power BI",sql,não
+"MySQL e PostgreSQL em produção",mysql,sim
+"Experiência com Oracle Database",oracle,sim
+"MongoDB NoSQL para documentos",mongodb,sim
+"PostgreSQL com PostGIS",postgresql,sim
+"Docker e Kubernetes para containers",docker,sim
+"Kubernetes na AWS com EKS",kubernetes,sim
+"AWS com Lambda e S3",aws,sim
+"Microsoft Azure cloud",azure,sim
+"GCP com BigQuery",gcp,sim
+"Apache Spark para processamento",spark,sim
+"Airflow para orquestração de pipelines",airflow,sim
+"Kafka para mensageria",kafka,sim
+"Power BI dashboards executivos",power bi,sim
+"PowerPoint presentation",power bi,não
+"Tableau para visualização",tableau,sim
+"Databricks lakehouse",databricks,sim
+"Snowflake data warehouse",snowflake,sim
+"dbt para transformação de dados",dbt,sim
+"BigQuery no GCP",bigquery,sim
+"Redshift data warehouse",redshift,sim
+"Excel avançado para planilhas",excel,sim
+"Git versionamento de código",git,sim
+"Looker para BI empresarial",looker,sim
+"Qlik para analytics",qlik,sim
+"Desenvolvedor Java backend",python,não
+"Sistemas operacionais Linux",sql,não
+"Vaga para analista de negócios",aws,não
+"Planilhas no Excel antigo",excel,sim
+"Oracle ou Postgres",oracle,sim
+"Oracle ou Postgres",postgresql,sim

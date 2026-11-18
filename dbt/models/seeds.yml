@@ -1,0 +1,21 @@
+version: 2
+
+seeds:
+  - name: tecnologias_monitoradas
+    description: "Lista de tecnologias monitoradas para extração nos marts (fonte única, compartilhada com o Python)."
+    columns:
+      - name: tecnologia
+        tests: [not_null, unique]
+
+  - name: classificacao_tecnologias_validacao
+    description: "Conjunto rotulado manualmente para avaliar precisão e recall da classificação de tecnologias via regex no dbt."
+    columns:
+      - name: texto
+        tests: [not_null]
+      - name: tecnologia_esperada
+        tests: [not_null]
+      - name: deve_cascar
+        tests: [not_null]
+        accepted_values:
+          arguments:
+            values: ["sim", "não"]

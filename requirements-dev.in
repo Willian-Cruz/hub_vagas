@@ -1,0 +1,5 @@
+pytest
+ruff
+pip-tools
+pip-audit
+detect-secrets

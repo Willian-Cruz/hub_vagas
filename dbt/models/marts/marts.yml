@@ -81,3 +81,24 @@ models:
         tests: [not_null]
       - name: pct_nao_nulo
         tests: [not_null]
+  - name: mart_saude_pipeline
+    description: "Visão consolidada da saúde do pipeline por fonte: taxas de sucesso/falha, duração, volume, última coleta."
+    columns:
+      - name: origem
+        tests: [not_null, unique]
+      - name: total_execucoes
+        tests: [not_null]
+      - name: sucessos
+        tests: [not_null]
+      - name: falhas
+        tests: [not_null]
+      - name: pct_sucesso
+        tests: [not_null]
+      - name: pct_falha
+        tests: [not_null]
+      - name: ultima_coleta_sucesso
+      - name: status_saude
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["saudavel", "falhas_intermitentes", "sempre_falha", "baixa_confiabilidade", "dados_desatualizados", "sem_coleta_sucesso"]

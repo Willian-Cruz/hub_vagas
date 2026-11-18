@@ -38,6 +38,7 @@ select
     data_publicacao,
     qtd_posicoes,
     data_coleta,
+    data_atualizacao,
     is_relevant,
     descricao_truncada
 from salario_texto

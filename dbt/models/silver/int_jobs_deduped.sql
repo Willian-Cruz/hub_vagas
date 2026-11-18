@@ -67,6 +67,7 @@ select
     escolaridade,
     qtd_posicoes,
     data_publicacao,
+    data_atualizacao,
     -- Precisão da data de publicação: hora (tem componente de hora), dia (apenas data),
     -- estimada (veio de texto relativo, ex: "Há 7 dias"). Calculada a partir do
     -- timestamp; o scraper pode sobrescrever com 'estimada' quando souber.

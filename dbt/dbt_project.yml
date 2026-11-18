@@ -13,16 +13,34 @@ clean-targets:
   - "dbt_packages"
 
 vars:
+  # ==========================================================================
+  # FRESHNESS - limiares expressam EXPECTATIVA, nao estado atual.
+  # Fonte: bronze.scrape_runs, so contas execucoes com sucesso ou parcial.
+  # Um dia sem coleta deve fazer o teste de freshness falhar.
+  # ==========================================================================
+  freshness_warn_hours: 24
+  freshness_error_hours: 72
+
   # Limiares de percentual de NULL na Silver (assert_silver_null_pct.sql).
-  # Valores "significativos": apertados o suficiente para flagar regressões,
-  # mas folgados para aceitar portais que não trazem certo campo (ex.: Catho
-  # não traz descricao/modalidade/salario no card).
+  # Valores "significativos": apertados o suficiente para flagar regressoes,
+  # mas folgados para aceitar portais que nao trazem certo campo.
   null_pct_empresa: 0.50
   null_pct_localizacao: 0.50
   null_pct_senioridade: 0.30
   null_pct_modalidade: 0.50
   null_pct_salario: 0.40
   null_pct_descricao: 0.30
+
+  # ==========================================================================
+  # QUALIDADE DE CAMPOS - desvio maximo (pontos percentuais) vs mediana
+  # dos ultimos 7 dias antes de falhar o teste.
+  # Limitacao conhecida (ex.: modalidade na Catho) = warn com meta documentada.
+  # Invariante (unicidade, sem placeholder) = error.
+  # ==========================================================================
+  qualidade_desvio_max_pontos: 10
+
+  # VOLUME - jobs_found abaixo de X% da media semanal da fonte falha o teste.
+  volume_min_pct_media_semanal: 50
 
 models:
   hub_vagas:

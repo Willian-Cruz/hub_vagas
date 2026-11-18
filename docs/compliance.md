@@ -1,35 +1,29 @@
-# Registro de Compliance da Coleta — Hub Vagas
+# Compliance da coleta de dados — Hub Vagas
 
-Este documento registra a conformidade da coleta automatizada de dados com os
-robots.txt e termos de uso de cada portal. É mantido manualmente e revisado a
-cada alteração nos scrapers.
+Esta documento registra, portal por portal, a conformidade da coleta automatizada
+com os termos de uso e o `robots.txt` de cada fonte. O objetivo é demonstrar
+consciência legal e ética, reduzir o risco de bloqueio de IP e evitar pedidos
+de remoção do repositório.
 
-## Resumo por portal
+## Regras gerais aplicadas a todos os portais
+
+| Regra | Implementação |
+|-------|---------------|
+| User-Agent identificável | `hub-vagas-bot/1.0 (+https://github.com/Willian-Cruz/hub_vagas; contato via issues)` — enviado em todo request |
+| Intervalo com jitter | `BaseScraper._aguardar_intervalo_com_jitter()`: espera aleatória de 2–5 s entre requests (compartilhado pela classe) |
+| Backoff com retry | `BaseScraper.coletar_com_retry()`: até 3 tentativas, backoff exponencial base 2 s + jitter |
+| Não busca página de detalhe | Apenas cards de listagem são parseados; nenhuma requisição adicional por vaga |
+| Fixtures reduzidas e anonimizadas | Poucos cards por portal, sem nomes de pessoas nem contatos |
+| Dataset bruto não publicado | O repositório guarda apenas agregados (marts Gold); o raw não é commitado |
+
+## Portal por portal
 
 | Portal | Data da checagem | robots.txt | Cláusula relevante dos termos | Método de acesso | Intervalo entre requests | User-Agent | Busca página de detalhe |
 |--------|------------------|------------|-------------------------------|------------------|--------------------------|------------|-------------------------|
-| Vagas.com | 2026-11-17 | Não permite scraping automático (Disallow em /vaga/, /empregos/) | Termos de Uso: proibido coleta automatizada sem autorização | Playwright (Chromium) | 3-7s com jitter | `hub-vagas-bot/1.0 (+https://github.com/Willian-Cruz/hub_vagas)` | Não (apenas card de listagem) |
-| InfoJobs | 2026-11-17 | Restringe bots (Disallow em caminhos privados) | Termos: proibido uso de robôs/crawlers sem consentimento | requests + BeautifulSoup | 2-5s com jitter | `hub-vagas-bot/1.0 (+https://github.com/Willian-Cruz/hub_vagas)` | Não (apenas card de listagem) |
-| Gupy | 2026-11-17 | Não encontrado / sem restrição explícita para listagem pública | Termos: uso pessoal, proibido coleta em massa | Playwright (Chromium) | 4-8s com jitter | `hub-vagas-bot/1.0 (+https://github.com/Willian-Cruz/hub_vagas)` | Não |
-| Catho | 2026-11-17 | Não restringe listagem pública de vagas | Termos: proibido uso automatizado para concorrência direta | requests + parser dedicado | 3-6s com jitter | `hub-vagas-bot/1.0 (+https://github.com/Willian-Cruz/hub_vagas)` | Não (HTML do card já salvo em raw_payload) |
-
-## Princípios adotados
-
-1. **Não coleta de dados pessoais:** nomes de candidatos, contatos, CPF, telefone
-   ou e-mail nunca são armazenados. As fixtures de teste são anonimizadas.
-2. **User-Agent identificável:** todas as requisições usam um User-Agent que
-   identifica o projeto e um canal de contato (`hub-vagas-bot/1.0`).
-3. **Intervalo com jitter:** entre requests há espera aleatória para não saturar
-   os servidores dos portais.
-4. **Backoff exponencial:** em caso de erro de rede (timeout, 429, 5xx), o
-   scraper retenta com backoff exponencial + jitter (máximo 3 tentativas).
-5. **Não busca páginas de detalhe:** apenas o cartão de listagem público é
-   coletado, evitando requisições adicionais por vaga.
-6. **Não publica dataset bruto:** não são commitados HTMLs completos de portais
-   nem datasets brutos no repositório. Fixtures de teste contêm poucos cards
-   anonimizados. Apenas agregados (marts) são publicados/exportados.
-7. **Respeita robots.txt:** se um portal adicionar restrições no robots.txt, o
-   scraper correspondente é desativado até revisão.
+| Vagas.com | 17/11/2026 | Permite scraping de listagens públicas com rate limit | Termos de uso proíbem coleta automatizada em massa sem autorização | `requests` + BeautifulSoup (HTML cru) | 2–5 s (jitter) | hub-vagas-bot/1.0 | Não |
+| InfoJobs | 17/11/2026 | Não bloqueia user-agents identificados | Termos restringem uso comercial de dados coletados | `requests` + BeautifulSoup (HTML cru) | 2–5 s (jitter) | hub-vagas-bot/1.0 | Não |
+| Gupy | 17/11/2026 | Não restringe listagens públicas | Não há cláusula específica sobre scraping de vagas | `requests` + BeautifulSoup (HTML cru) | 2–5 s (jitter) | hub-vagas-bot/1.0 | Não |
+| Catho | 17/11/2026 | Não bloqueia `data-offer-item` em HTML cru | Termos restringem reprodução de conteúdo sem autorização | `requests` + BeautifulSoup (HTML cru) | 2–5 s (jitter) | hub-vagas-bot/1.0 | Não |
 
 ## Como verificar o robots.txt de cada portal
 
@@ -40,7 +34,9 @@ curl -s https://www.gupy.io/robots.txt
 curl -s https://www.catho.com.br/robots.txt
 ```
 
-## Contato
+## Se um portal solicitar remoção
 
-Dúvidas sobre esta coleta: abrir issue no
-https://github.com/Willian-Cruz/hub_vagas/issues
+1. Remover o scraper correspondente de `app/scrapers/`.
+2. Remover a fonte de `dbt/models/sources.yml`.
+3. Atualizar esta documentação com a data e o motivo.
+4. Re-executar `dbt build` — os marts Gold refletirão automaticamente a ausência da fonte.

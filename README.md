@@ -333,26 +333,32 @@ A variável opcional `DB_SSLMODE` (por exemplo, `require`) é lida apenas pelo d
 
 ### 3. Migrações
 
-`create_all()` não altera tabelas já existentes. Para bancos criados por versões anteriores, aplique as migrações de `infra/migrations` em ordem:
+`create_all()` não altera tabelas já existentes. Para bancos criados por versões anteriores, aplique as migrações de `infra/migrations` em ordem com `python infra/migrate.py`:
 
 | Migração | O que faz |
 | --- | --- |
-| `001` | Adiciona a chave da tabela de associação `job_technologies`. Interrompe se encontrar pares duplicados |
-| `002` | Adiciona `jobs.data_coleta`. Vagas antigas recebem o momento da migração, pois a versão anterior não guardava esse timestamp |
-| `003` | Cria o schema `bronze` com `scrape_runs` (`main.py` e `scheduler.py` também os criam automaticamente) |
-| `004` | Adiciona em `jobs` os campos `id_externo`, `data_publicacao`, `modalidade`, `experiencia`, `escolaridade`, `qtd_posicoes` e `chave_conteudo`; preenche `id_externo` a partir dos links já gravados; troca os textos "Não informado", "Confidencial" e "Localização Não Informada" por `NULL`; cria o índice único `(origem, id_externo)` |
-| `005` | Remove a tabela obsoleta `bronze.job_observations` (não lida por nenhum consumidor; o dbt lê direto da raw `jobs`) |
+| `001` | Adiciona a chave primária da tabela de associação `job_technologies`. Interrompe se encontrar pares duplicados |
+| `002` | Adiciona `jobs.data_coleta`. Vagas antigas recebem o momento da migração |
+| `003` | Cria o schema `bronze` com `scrape_runs` |
+| `004` | Adiciona em `jobs` os campos `id_externo`, `data_publicacao`, `modalidade`, `experiencia`, `escolaridade`, `qtd_posicoes` e `chave_conteudo`; troca placeholders por `NULL`; cria índice único `(origem, id_externo)` |
+| `005` | Remove a tabela obsoleta `bronze.job_observations` (`DROP TABLE IF EXISTS`) |
+| `006` | Cria `raw.job_observations` com `raw_payload JSONB`, `payload_hash`, `is_relevant` |
+| `007` | Cria `public.schema_migrations(arquivo, aplicado_em, checksum_sha256)` — controle do que já foi aplicado |
+| `008` | Cria a role `bi_reader` (somente leitura em `gold` e `bronze.scrape_runs`) |
 
-A `004` é idempotente e **interrompe** se houver o mesmo ID repetido no mesmo portal. Faça um backup antes de aplicá-la:
+Uma migração que apaga dados (ex.: `005`) exige backup documentado antes de aplicar:
 
 ```bash
-# use os valores de DB_USER, DB_NAME, DB_HOST e DB_PORT do seu .env
-# (no PowerShell, prefira -f a ">": o redirecionamento grava em UTF-16)
-pg_dump -h localhost -p 5432 -U usuario -d hub_vagas -f backup_antes_da_004.sql
-psql -h localhost -p 5432 -U usuario -d hub_vagas -f infra/migrations/004_jobs_novos_campos.sql
+# Backup antes de qualquer migração destrutiva
+pg_dump -h localhost -p 5432 -U usuario -d hub_vagas -f backup_antes_da_migracao.sql
+python infra/migrate.py          # aplica as pendentes
+python infra/migrate.py --verificar  # lista pendentes sem aplicar
 ```
 
-Com uma `DATABASE_URL` completa (banco remoto), passe a URL entre aspas no lugar dos parâmetros: `pg_dump "postgresql://usuario:senha@host:5432/banco" -f backup.sql`.
+`select * from public.schema_migrations` mostra o que foi aplicado em cada banco.
+
+Qualquer migração que apague dados exige backup registrado neste README antes de ser executada.
+
 
 ### 4. Pipeline — Ingestão e Transformação (etapas separadas)
 
@@ -433,17 +439,33 @@ Os demais marts Gold (`mart_vagas_por_dia`, `mart_vagas_por_origem_localidade`, 
 
 Em vez de exportar manualmente para Excel, o Power BI pode ler direto das tabelas Gold no PostgreSQL:
 
-1. No Power BI Desktop: **Obter Dados → PostgreSQL database**
-2. Informe host, porta, database, usuário e senha (do `.env`)
-3. Selecione as tabelas do schema `gold`:
+> **Não use o usuário do pipeline** (do `.env`) no Power BI: ele tem permissão de gravação e criação de banco/schemas. Um `.pbix` compartilhado com essa credencial entrega permissão de escrita. Use a role somente-leitura `bi_reader` abaixo.
+
+1. Crie a role `bi_reader` (execute como o usuário do dbt; defina a senha fora do repositório):
+
+   ```sql
+   -- Veja infra/migrations/008_role_bi_reader.sql
+   CREATE ROLE bi_reader LOGIN password '<defina-fora-do-repo>';
+   GRANT CONNECT ON DATABASE hub_vagas TO bi_reader;
+   GRANT USAGE ON SCHEMA gold TO bi_reader;
+   GRANT SELECT ON ALL TABLES IN SCHEMA gold TO bi_reader;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA gold GRANT SELECT ON TABLES TO bi_reader;
+   ```
+
+   O dbt recria as tabelas Gold a cada build e perde os grants, por isso `dbt_project.yml` declara `+grants: select: ['bi_reader']` nos modelos `marts/`.
+
+2. No Power BI Desktop: **Obter Dados → PostgreSQL database**
+3. Informe host, porta, database e as credenciais de `bi_reader`
+4. Selecione as tabelas do schema `gold`:
    - `gold.mart_vagas` — base principal (exportação e dashboard)
    - `gold.mart_salarios` — cobertura salarial por origem
    - `gold.mart_vagas_por_dia` — volume de coleta por dia/portal
    - `gold.mart_demanda_tecnologias` — ranking de tecnologias
    - `gold.mart_qualidade_campos` — saúde do parser por fonte/campo
-4. Carregue e modele no Power BI. Mantenha o Excel (`data/exports/vagas.xlsx`) como entrega portátil.
+5. Carregue e modele no Power BI. Mantenha o Excel (`data/exports/vagas.xlsx`) como entrega portátil.
 
-> **Dica:** publique prints do dashboard do Power BI neste README para servir de vitrine do projeto.
+Para `pg_dump`/`psql` manual, use `PGPASSWORD` ou `.pgpass`, nunca a senha na URL.
+
 
 Além dos testes declarados nos `.yml` (não nulo, único, valores aceitos), há testes em `dbt/tests/` que protegem a Silver: sem ID repetido no mesmo portal, sem vaga repetida por conteúdo e sem o texto "Não informado" nos campos.
 
@@ -457,6 +479,31 @@ python export_excel.py
 Gera `data/exports/vagas.xlsx` a partir de `gold.mart_vagas`, que alimenta o dashboard no Power BI. As colunas são `id`, `titulo`, `empresa`, `senioridade`, `localizacao`, `salario`, `modalidade`, `experiencia`, `escolaridade`, `qtd_posicoes`, `origem`, `id_externo`, `link`, `descricao`, `data_publicacao`, `data_coleta` e `tecnologias`. As datas saem no horário de São Paulo, sem fuso.
 
 Execute `python app/main.py` e depois `python app/transform.py` antes de exportar.
+
+### Como manter rodando todo dia
+
+O APScheduler roda num processo local e para quando o PC dorme. Para execução confiável
+diária, use o Agendador de Tarefas do Windows:
+
+1. Registre a tarefa (PowerShell como Administrador):
+
+   ```powershell
+   .\scripts\registrar_tarefa_coletadiaria.ps1
+   ```
+
+   Isso cria a tarefa `HubVagas\ColetaDiaria`, que roda todo dia às 06:00 (São Paulo) executando
+   `venv\Scripts\python.exe app\main.py` seguido de `venv\Scripts\python.exe app\transform.py`.
+   Se o PC estiver dormindo às 06:00, a tarefa é disparada assim que possível após a inicialização.
+
+2. Notificação de falha: configure `NOTIFICACAO_WEBHOOK_URL` (Discord/Telegram) ou
+   `SMTP_HOST` + `SMTP_USER`/`SMTP_PASS` no `.env`. Quando o código de saída for diferente de 0,
+   o pipeline envia aviso via webhook ou e-mail (fallback: apenas log).
+
+3. Retry com backoff: os scrapers já tentam até 3 vezes com backoff exponencial + jitter
+   para erros de rede (`BaseScraper.coletar_com_retry()`).
+
+4. Trava contra execução simultânea: o pipeline usa `pg_try_advisory_lock` para evitar
+   duas instâncias rodando ao mesmo tempo.
 
 ---
 

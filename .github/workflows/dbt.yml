@@ -42,6 +42,12 @@ jobs:
           pip install -r requirements.txt
           pip install dbt-postgres
 
+      - name: Install pip-tools and verify lock
+        run: |
+          pip install pip-tools
+          piptools compile requirements.in --output-file /tmp/requirements.locked.txt --no-emit-options --quiet
+          diff requirements.txt /tmp/requirements.locked.txt && echo "Lock sincronizado" || { echo "ERRO: requirements.txt esta defasado."; exit 1; }
+
       - name: Wait for PostgreSQL
         run: |
           for i in {1..30}; do

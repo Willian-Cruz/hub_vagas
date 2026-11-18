@@ -29,79 +29,80 @@ flowchart LR
 ```
 hub_vagas/
 ├── app/                          # Camada de aplicação (Python)
-│   ├── config/                   # Configurações (settings.py)
-│   ├── constants/                # Constantes (seletores CSS)
 │   ├── database/                 # ORM SQLAlchemy + conexão
 │   │   ├── connection.py         # Engine, sessão, criação DB
 │   │   ├── models.py             # Base declarativa
-│   │   ├── job_model.py          # Tabela raw jobs
+│   │   ├── job_model.py          # Tabela raw jobs (legado, migração 004)
 │   │   ├── bronze_model.py       # Tabela bronze.scrape_runs
-│   │   ├── tech_model.py         # Tabela technologies
-│   │   └── job_tech_model.py     # Associação job↔technology
-│   ├── repositories/             # Data Access Layer
-│   │   ├── job_repository.py     # Upsert + dedup raw jobs
-│   │   └── bronze_repository.py  # Persistência scrape_runs
-│   ├── scrapers/                 # Coletores por portal
-│   │   ├── base_scraper.py       # Classe abstrata + ScrapeResult
-│   │   ├── vagas_scraper.py      # Playwright + BeautifulSoup
-│   │   ├── infojobs_scraper.py   # requests + BeautifulSoup
-│   │   ├── gupy_scraper.py       # Playwright (seletores a calibrar)
-│   │   ├── catho_scraper.py      # requests + parser dedicado
-│   │   ├── catho_parser.py       # Parser HTML Catho
-│   │   └── parser_utils.py       # Utilitários de parsing
-│   ├── schemas/                  # Validação Pydantic
-│   │   └── job_schema.py         # JobSchema (contrato de entrada)
-│   ├── services/                 # Regras de negócio
-│   │   ├── collector_service.py  # Orquestra scrapers
-│   │   ├── pipeline_service.py   # Pipeline ingestão completa
-│   │   ├── relevance_service.py  # Filtro por título (termos de dados)
-│   │   ├── normalize_service.py  # Normalização: local, empresa, modalidade
-│   │   ├── seniority_service.py  # Cascata de senioridade (5 níveis)
-│   │   ├── salary_service.py     # Extração salário (card + descrição)
-│   │   ├── tech_service.py       # Extração tecnologias (18 termos)
-│   │   ├── export_service.py     # Geração Excel
-│   │   └── scheduler_service.py  # APScheduler (cron/intervalo)
-│   ├── utils/                    # Utilitários
-│   │   ├── logger.py             # Logging rotativo (5MB, 3 backups)
-│   │   ├── text_utils.py         # Normalização texto, chave_conteudo
-│   │   └── date_utils.py         # Parsing datas relativas/absolutas
-│   ├── tests/                    # Testes unitários + integração
-│   │   ├── conftest.py           # Mock global DB (SQLAlchemy)
-│   │   ├── fixtures/             # HTML real dos portais
-│   │   └── test_*.py             # Testes passando (suíte mockada, sem PostgreSQL)
-│   ├── main.py                   # Entrypoint: scrape → raw jobs
-│   ├── transform.py              # Entrypoint: dbt build
-│   ├── run_dbt.py                # Wrapper dbt (carrega .env → profiles.yml)
-│   ├── scheduler.py              # Agendador CLI (diário/intervalo)
-│   └── export_excel.py           # Exporta gold.mart_vagas → .xlsx
+│   │   ├── repositories/         # Data Access Layer
+│   │   │   ├── job_repository.py # Persistência append-only em raw.job_observations
+│   │   │   └── bronze_repository.py  # Persistência scrape_runs
+│   │   ├── scrapers/             # Coletores por portal
+│   │   │   ├── base_scraper.py   # Template Method + retry + rate-limit + compliance
+│   │   │   ├── vagas_scraper.py  # Playwright + BeautifulSoup
+│   │   │   ├── infojobs_scraper.py   # requests + BeautifulSoup
+│   │   │   ├── gupy_scraper.py       # Playwright (seletores a calibrar)
+│   │   │   ├── catho_scraper.py      # requests + parser dedicado
+│   │   │   ├── catho_parser.py       # Parser HTML Catho
+│   │   │   └── parser_utils.py       # Utilitários de parsing
+│   │   ├── schemas/                  # Validação Pydantic
+│   │   │   └── job_schema.py         # JobSchema (contrato de entrada)
+│   │   ├── services/                 # Regras de negócio
+│   │   │   ├── collector_service.py  # Orquestra scrapers + filtro de relevância
+│   │   │   ├── pipeline_service.py   # Pipeline ingestão completa (advisory lock + notifier)
+│   │   │   ├── relevance_service.py  # Filtro por título (termos de dados)
+│   │   │   ├── normalize_service.py  # Normalização: local, empresa, modalidade
+│   │   │   ├── export_service.py     # Geração Excel
+│   │   │   └── scheduler_service.py  # APScheduler (cron/intervalo)
+│   │   ├── utils/                    # Utilitários
+│   │   │   ├── logger.py             # Logging rotativo (5MB, 3 backups)
+│   │   │   ├── text_utils.py         # Normalização texto, chave_conteudo
+│   │   │   └── date_utils.py         # Parsing datas relativas/absolutas
+│   │   ├── tests/                    # Testes unitários + integração
+│   │   │   ├── conftest.py           # Mock global DB (SQLAlchemy)
+│   │   │   ├── fixtures/             # HTML real dos portais
+│   │   │   └── test_*.py             # Testes passando (suíte mockada, sem PostgreSQL)
+│   │   ├── main.py                   # Entrypoint: scrape → raw.job_observations
+│   │   ├── transform.py              # Entrypoint: dbt build
+│   │   ├── run_dbt.py                # Wrapper dbt (carrega .env → profiles.yml)
+│   │   ├── scheduler.py              # Agendador CLI (diário/intervalo)
+│   │   ├── notifier.py               # Webhook/e-mail de falha
+│   │   └── export_excel.py           # Exporta gold.mart_vagas → .xlsx
 │
 ├── dbt/                          # Camada de transformação (SQL)
 │   ├── macros/                   # Macros reutilizáveis
 │   │   ├── select_raw_jobs.sql   # Seleciona raw por fonte
-│   │   ├── normalize_*.sql       # Normalização campos
-│   │   ├── classify_seniority_cascade.sql  # Senioridade SQL
-│   │   ├── monitored_technologies.sql      # 18 techs monitoradas
-│   │   └── generate_schema_name.sql        # Nomes de schema dinâmicos
-│   ├── models/
-│   │   ├── sources.yml           # Fontes: raw.jobs + bronze.scrape_runs (+ raw.job_observations em P3)
-│   │   ├── staging/              # Views por fonte (stg_*_jobs)
-│   │   ├── intermediate/         # Silver: jobs.sql (core transform)
-│   │   │   └── intermediate.yml  # Testes Silver
-│   │   └── marts/                # Gold: mart_vagas, mart_vagas_por_dia, etc.
-│   │       └── marts.yml         # Testes Gold
-│   ├── tests/                    # Testes de qualidade de dados
-│   │   ├── assert_silver_*.sql   # Unicidade, NULL%, freshness, placeholders
-│   │   └── assert_gold_tecnologias.sql
-│   ├── dbt_project.yml           # Config dbt (inclui `vars:` em P2)
-│   └── profiles.yml.example      # Template perfis (sem segredos)
+│   │   │   normalize_*.sql       # Normalização campos (senioridade, salário, localização)
+│   │   │   ├── classify_seniority_cascade.sql  # Senioridade SQL
+│   │   │   ├── monitored_technologies.sql      # Techs monitoradas (regex sobre seed)
+│   │   │   └── generate_schema_name.sql        # Nomes de schema dinâmicos
+│   │   ├── models/
+│   │   │   ├── sources.yml           # Fontes: raw_observations.job_observations + bronze.scrape_runs
+│   │   │   ├── staging/              # Views por fonte (stg_*_jobs), lê de raw_observations.job_observations
+│   │   │   ├── intermediate/         # Silver: int_jobs_unioned → int_jobs_normalized → int_jobs_deduped → silver.jobs
+│   │   │   │   └── intermediate.yml  # Testes Silver
+│   │   │   └── marts/                # Gold: mart_vagas, mart_vagas_por_dia, etc. (+grants bi_reader)
+│   │   │       └── marts.yml         # Testes Gold
+│   │   ├── seeds/                    # tecnologias_monitoradas.csv, termos_relevancia.csv (fonte única)
+│   │   ├── tests/                    # Testes de qualidade de dados
+│   │   │   ├── assert_silver_*.sql   # Unicidade, NULL%, freshness, placeholders, contrato Python↔dbt
+│   │   │   └── assert_gold_tecnologias.sql
+│   │   ├── dbt_project.yml           # Config dbt (vars: freshness, qualidade, volume; +grants bi_reader)
+│   │   └── profiles.yml.example      # Template perfis (sem segredos)
 │
 ├── docs/
-│   └── adr/
-│       └── 001-bronze-payload-para-public-jobs.md
+│   ├── adr/
+│   │   ├── 0001-jobs-como-raw.md
+│   │   └── 0002-filtro-de-relevancia.md
+│   └── compliance.md               # Conformidade da coleta (robots.txt, termos, rate limit)
 │
-├── infra/migrations/             # Evolução schema (001-005 + 006 raw.job_observations em P3)
+├── infra/migrations/             # Evolução schema (001-008)
+├── scripts/                      # Utilitários operacionais
+│   ├── task_hub_vagas_coletadiaria.xml   # Agendador de Tarefas Windows
+│   └── registrar_tarefa_coletadiaria.ps1 # Registra a tarefa no Windows
 ├── .env.example                  # Template variáveis ambiente
-├── requirements.txt              # Dependências Python
+├── requirements.in               # Dependências não-pinadas (fonte para pip-compile)
+├── requirements.txt              # Dependências travadas (saída do pip-compile)
 └── README.md                     # Documentação completa (histórico; fonte da verdade: ARCHITECTURE.md)
 ```
 
@@ -117,8 +118,8 @@ flowchart TD
     B --> C[scraper.coletar → ScrapeResult]
     C --> D[RelevanceService.separar]
     D --> E[PipelineService.executar]
-    E --> F[JobRepository.salvar → raw public.jobs]
-    E --> G[BronzeRepository.persistir_resultados → bronze.scrape_runs]
+E --> F[JobRepository.salvar → raw.job_observations]
+E --> G[BronzeRepository.persistir_resultados → bronze.scrape_runs]
 ```
 
 **Detalhes do `JobRepository.salvar()`:**
@@ -150,7 +151,7 @@ flowchart TD
 
     subgraph GOLD [MARTS / GOLD - Tables]
         G1[mart_vagas = silver.jobs + tecnologias]
-        G2[mart_vagas_por_dia = raw.jobs GROUP BY data,origem]
+        G2[mart_vagas_por_dia = silver.jobs GROUP BY data,origem]
         G3[mart_vagas_por_origem_localidade = silver.jobs GROUP BY orig,loc,sen]
         G4[mart_demanda_tecnologias = CROSS JOIN techs + regex desc]
         G5[mart_status_fontes = bronze.scrape_runs latest/run]
@@ -159,7 +160,6 @@ flowchart TD
     S1 & S2 & S3 & S4 --> I1
     I1 --> I2 --> I3 --> I4 --> I5 --> I6 --> I7
     I7 --> G1 & G2 & G3 & G4
-    S1 & S2 & S3 & S4 --> G2
     S1 & S2 & S3 & S4 --> G5
 ```
 
@@ -212,14 +212,24 @@ A tabela pública `public.jobs` é mantida como legado (migração `004`); não 
 | `senioridade` | string | Normalizada (9 valores) |
 | `localizacao` | string | Preposições minúsculas |
 | `descricao` | text | |
-| `salario` | string | Extraído card + descrição |
+| `salario_texto` | string | Salário como publicado (ex: "R$ 3.000,00") |
+| `salario_min` | numeric | Valor mínimo extraído |
+| `salario_max` | numeric | Valor máximo extraído |
+| `salario_tipo` | string | faixa/exato/a_combinar/nao_informado |
 | `modalidade` | string | Remoto/Híbrido/Presencial/NULL |
 | `experiencia` | string | |
 | `escolaridade` | string | |
 | `qtd_posicoes` | int | |
-| `data_publicacao` | datetime | |
+| `data_publicacao` | timestamptz | UTC; precisão em `data_publicacao_precisao` |
+| `data_atualizacao` | timestamptz | UTC; apenas Catho preenche |
 | `chave_conteudo` | string | Dedup cross-portal |
-| `data_coleta` | datetime | |
+| `data_coleta` | timestamptz | |
+| `dedup_group_id` | string | Grupo de dedup |
+| `first_seen_at` | timestamptz | Primeira coleta do grupo |
+| `last_seen_at` | timestamptz | Última coleta do grupo |
+| `is_canonical` | boolean | true = linha mais recente do grupo |
+| `dias_no_ar` | numeric | Diferença entre first_seen_at e last_seen_at em dias |
+| `is_ativa` | boolean | true se vista nos últimos 3 dias |
 
 **Dedup Silver:** todas as linhas são mantidas (nenhuma apagada); cada grupo de conteúdo recebe `dedup_group_id`, `first_seen_at`/`last_seen_at` e `is_canonical` (linha mais recente do grupo). Os marts usam apenas `is_canonical = true`. A dedup é por portal: a mesma vaga em dois portais conta duas vezes.
 
@@ -232,7 +242,7 @@ A tabela pública `public.jobs` é mantida como legado (migração `004`); não 
 | `mart_vagas_por_origem_localidade` | (origem, local, senioridade) | Heatmap geo/sênior |
 | `mart_demanda_tecnologias` | tecnologia | Ranking techs |
 | `mart_status_fontes` | origem | Monitoramento freshness |
-| `mart_salarios` | origem | Cobertura salarial |
+| `mart_salarios` | (origem, senioridade) | Cobertura salarial: total, n_com_salario, média, mediana |
 | `mart_qualidade_campos` | (fonte, campo) | Saúde do parser por campo |
 
 ---
@@ -244,10 +254,10 @@ A tabela pública `public.jobs` é mantida como legado (migração `004`); não 
 | **Repository Pattern** | `job_repository.py`, `bronze_repository.py` | Isola lógica de persistência; `salvar()` grava payload bruto em `raw.job_observations` sem normalização |
 | **Strategy Pattern** | `base_scraper.py` + subclasses | Cada portal implementa `_buscar_pagina()` e `_parsear_cards()` |
 | **Template Method** | `BaseScraper.coletar()` | Pai cuida do loop de páginas, detecção de repetida, tratamento de exceção e montagem do `ScrapeResult`; filhos implementam `_buscar_pagina()` e `_parsear_cards()` |
-| **Pipeline/Chain of Responsibility** | `seniority_service.py` | Cascata: portal → título → descrição → experiência → anos |
+| **Pipeline/Chain of Responsibility** | `classify_seniority_cascade.sql` (dbt macro) | Cascata: portal → título → descrição → experiência → anos (única implementação, no dbt) |
 | **Decorator (Logging)** | `utils/logger.py` | Rotação arquivo + console |
 | **Factory** | `run_dbt.py` | Cria `profiles.yml` dinâmico do `.env` |
-| **Configuration as Code** | `settings.py` (Pydantic), `dbt_project.yml`, `dbt/seeds/*.csv` | Tipagem + validação; seeds são fonte única de tecnologias e termos de relevância |
+| **Configuration as Code** | `dbt_project.yml`, `dbt/seeds/*.csv`, `.env.example` | Tipagem + validação; seeds são fonte única de tecnologias e termos de relevância |
 | **Idempotency** | Migrações SQL (`infra/migrate.py`), `JobRepository.salvar()` | Re-executável sem side effects; `schema_migrations` rastreia o que foi aplicado |
 | **Append-Only** | `bronze.scrape_runs`, `raw.job_observations` | Histórico imutável de execuções e observações brutas |
 | **Separation of Concerns** | Python (ingestão) / dbt (transformação) | Linguagem certa para cada etapa; Python não normaliza, dbt é o dono das regras de negócio |

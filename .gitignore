@@ -48,3 +48,12 @@ debug_*.png
 # dbt profiles (gerado dinamicamente)
 dbt/profiles.yml
 dbt/.user.yml
+
+# ── Segurança: credenciais e segredos (nunca versionar) ─────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets/

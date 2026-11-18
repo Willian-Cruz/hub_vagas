@@ -185,4 +185,18 @@ jobs:
       - name: Rodar ruff check
         run: ruff check app/
         working-directory: ./..
-        continue-on-error: true
+
+  # ── Job 5: Seguranca (detecao de secrets e credenciais) ────────────────
+  security:
+    name: Seguranca (detecao de secrets)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar detect-secrets
+        run: pip install detect-secrets
+
+      - name: Escanear secrets no repositorio
+        run: detect-secrets scan

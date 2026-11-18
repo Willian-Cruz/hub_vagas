@@ -47,39 +47,57 @@ ADVISORY_LOCK_KEY = 1794880335682
 class PipelineService:
 
     @staticmethod
-    def _adquirir_travar_execucao() -> bool:
+    def _adquirir_travar_execucao():
         """Tenta adquirir o advisory lock do PostgreSQL.
 
-        Returns True se conseguiu o lock (pode seguir), False se outra instância
-        já está executando (aborta para evitar duplicação).
+        Retorna (conexao_aberta, obteve_lock). A conexao deve ser mantida aberta
+        durante toda a execucao, pois locks de sessao (pg_advisory_*) pertencem
+        à conexao que os adquiriu. Fechar a conexao libera o lock automaticamente.
+
+        Se obteve_lock for False, a conexao ja foi fechada (outra instancia
+        esta executando).
         """
         try:
-            with engine.connect() as connection:
-                resultado = connection.execute(
-                    text("SELECT pg_try_advisory_lock(:key)"),
-                    {"key": ADVISORY_LOCK_KEY},
-                ).scalar()
-                connection.commit()
-                return bool(resultado)
+            connection = engine.connect()
+            resultado = connection.execute(
+                text("SELECT pg_try_advisory_lock(:key)"),
+                {"key": ADVISORY_LOCK_KEY},
+            ).scalar()
+            connection.commit()
+            if bool(resultado):
+                return connection, True
+            else:
+                connection.close()
+                return None, False
         except Exception:
-            # Se não conseguir consultar o banco, deixa seguir (não trava por cautela)
+            # Se nao conseguir consultar o banco, fecha a conexao e segue sem trava
+            try:
+                connection.close()
+            except Exception:
+                pass
             logger.warning(
-                "Não foi possível consultar o advisory lock; seguindo sem trava"
+                "Nao foi possível consultar o advisory lock; seguindo sem trava"
             )
-            return True
+            return None, True
 
     @staticmethod
-    def _liberar_travar_execucao() -> None:
-        """Libera o advisory lock ao final da execução."""
+    def _liberar_travar_execucao(connection) -> None:
+        """Libera o advisory lock na mesma conexao que o adquiriu."""
+        if connection is None:
+            return
         try:
-            with engine.connect() as connection:
-                connection.execute(
-                    text("SELECT pg_advisory_unlock(:key)"),
-                    {"key": ADVISORY_LOCK_KEY},
-                )
-                connection.commit()
+            connection.execute(
+                text("SELECT pg_advisory_unlock(:key)"),
+                {"key": ADVISORY_LOCK_KEY},
+            )
+            connection.commit()
         except Exception:
             logger.warning("Não foi possível liberar o advisory lock")
+        finally:
+            try:
+                connection.close()
+            except Exception:
+                pass
 
     @staticmethod
     def executar() -> dict:
@@ -105,7 +123,7 @@ class PipelineService:
                 "sucesso":           bool,  # True se pelo menos uma fonte trouxe vagas
             }
         """
-        trave_adquirida = PipelineService._adquirir_travar_execucao()
+        trave_conexao, trave_adquirida = PipelineService._adquirir_travar_execucao()
         if not trave_adquirida:
             logger.warning(
                 "Outra instância do pipeline já está em execução (advisory lock). Abortando."
@@ -114,7 +132,8 @@ class PipelineService:
                 "run_id": None,
                 "coletadas": 0,
                 "descartadas": 0,
-                "raw_salvas": 0,
+                "raw_novas": 0,
+                "raw_revisadas": 0,
                 "raw_duplicadas": 0,
                 "raw_erros": 0,
                 "bronze_ok": False,
@@ -126,6 +145,7 @@ class PipelineService:
                 "duracao_seg": 0.0,
                 "sucesso": False,
                 "bloqueado_por_trava": True,
+                "status": "FALHADO",
             }
 
         logger.info("=" * 60)
@@ -149,6 +169,7 @@ class PipelineService:
             "duracao_seg":    0.0,
             "sucesso":        False,
             "bloqueado_por_trava": False,
+            "status":         "FALHADO",
         }
 
         inicio = time.time()
@@ -250,10 +271,23 @@ class PipelineService:
             except Exception:
                 logger.exception("Falha ao persistir status no Bronze")
 
-            # Sucesso = pelo menos uma fonte trouxe vagas (SUCCESS ou PARTIAL com vagas)
-            # e a persistência no Bronze funcionou
+            # Sucesso parcial ou total = Bronze gravado e pelo menos uma fonte
+            # retornou dados (SUCESSO ou PARTIAL com vagas)
             fontes_com_vagas = fontes_sucesso + [f for f in fontes_parcial if f.jobs]
-            metricas["sucesso"] = bronze_ok and len(fontes_com_vagas) > 0
+            tem_dados = len(fontes_com_vagas) > 0
+            todas_sucesso = len(fontes_sucesso) == len(resultados) and len(resultados) > 0
+
+            if bronze_ok and tem_dados:
+                metricas["sucesso"] = True
+                metricas["status"] = "SUCESSO" if todas_sucesso else "PARCIAL"
+            elif bronze_ok and not tem_dados:
+                # Bronze funcionou, mas nenhuma fonte trouxe dados
+                metricas["sucesso"] = False
+                metricas["status"] = "FALHADO"
+            else:
+                # Bronze nao funcionou (erro de persistência)
+                metricas["sucesso"] = False
+                metricas["status"] = "FALHADO"
 
             if metricas["fontes_falha"] > 0:
                 logger.warning(
@@ -275,9 +309,9 @@ class PipelineService:
             enviar_falha(metricas, erro=str(e))
 
         finally:
-            PipelineService._liberar_travar_execucao()
+            PipelineService._liberar_travar_execucao(trave_conexao)
             metricas["duracao_seg"] = round(time.time() - inicio, 2)
-            status = "CONCLUÍDO" if metricas["sucesso"] else "FALHOU"
+            status = "SUCESSO" if metricas["sucesso"] else "FALHADO"
             logger.info(
                 f"PIPELINE {status} em {metricas['duracao_seg']}s | "
                 f"Coletadas: {metricas['coletadas']} | "

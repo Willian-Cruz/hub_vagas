@@ -86,7 +86,12 @@ def migrações_aplicadas(engine) -> dict[str, str]:
 
 
 def aplicar_migracao(engine, caminho: Path) -> None:
-    """Executa um arquivo SQL e registra na tabela de controle."""
+    """Executa um arquivo SQL e registra na tabela de controle.
+
+    Nunca atualiza o registro de uma migracao ja aplicada. Se o arquivo
+    ja existe em schema_migrations, significa que ja foi executada e nao
+    deve ser re-aplicada nem ter seu checksum alterado.
+    """
     sql = caminho.read_text(encoding="utf-8")
     soma = checksum(sql)
 
@@ -97,9 +102,7 @@ def aplicar_migracao(engine, caminho: Path) -> None:
                 """
                 INSERT INTO public.schema_migrations (arquivo, aplicado_em, checksum_sha256)
                 VALUES (:arquivo, :aplicado_em, :checksum)
-                ON CONFLICT (arquivo) DO UPDATE
-                    SET aplicado_em = EXCLUDED.aplicado_em,
-                        checksum_sha256 = EXCLUDED.checksum_sha256
+                ON CONFLICT (arquivo) DO NOTHING
                 """
             ),
             {
@@ -125,9 +128,27 @@ def main():
     garantir_tabela_controle(engine)
 
     aplicadas = migrações_aplicadas(engine)
-    pendentes = [
-        a for a in arquivos_migracao() if a.name not in aplicadas
-    ]
+    arquivos = arquivos_migracao()
+
+    # ── Detectar migrações já aplicadas que foram modificadas ─────────────
+    modificadas = []
+    for arquivo in arquivos:
+        if arquivo.name in aplicadas:
+            soma_atual = checksum(arquivo.read_text(encoding="utf-8"))
+            if aplicadas[arquivo.name] != soma_atual:
+                modificadas.append(arquivo)
+
+    if modificadas:
+        print("ERRO: As seguintes migrações ja aplicadas foram modificadas:")
+        for m in modificadas:
+            print(f"  - {m.name}")
+        print(
+            "\nNao e permitido alterar uma migracao ja aplicada. "
+            "Crie uma nova migracao em vez de modificar uma existente."
+        )
+        return 1
+
+    pendentes = [a for a in arquivos if a.name not in aplicadas]
 
     if not pendentes:
         print("Nenhuma migração pendente. Banco está em dia.")

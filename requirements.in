@@ -1,0 +1,12 @@
+beautifulsoup4
+playwright
+requests
+SQLAlchemy
+psycopg[binary]
+pydantic
+pandas
+python-dotenv
+openpyxl
+pytest
+APScheduler
+dbt-postgres

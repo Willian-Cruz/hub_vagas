@@ -29,6 +29,12 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
+      - name: Instalar pip-tools e verificar lock de dependencias
+        run: |
+          pip install pip-tools
+          piptools compile requirements.in --output-file /tmp/requirements.locked.txt --no-emit-options --quiet
+          diff requirements.txt /tmp/requirements.locked.txt && echo "Lock sincronizado" || { echo "ERRO: requirements.txt esta defasado. Rode 'pip-compile requirements.in' e commit o resultado."; exit 1; }
+
       - name: Rodar testes unitarios
         run: pytest tests/ -m "not integration" -q --tb=short
         working-directory: ./app

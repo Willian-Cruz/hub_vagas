@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Date>2026-11-18T00:00:00</Date>
+    <Author>Hub Vagas</Author>
+    <Description>Executa a ingestão de vagas do hub_vagas (main.py) seguida da transformação dbt (transform.py) todo dia às 06:00, horário de São Paulo.</Description>
+    <URI>\HubVagas\ColetaDiaria</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger>
+      <StartBoundary>2026-11-18T06:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+    <!-- Se o PC estiver dormindo às 06:00, executa assim que possível após ligar -->
+    <BootTrigger>
+      <Enabled>true</Enabled>
+      <Delay>PT5M</Delay>
+    </BootTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>%USERNAME%</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>true</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>true</WakeToRun>
+    <ExecutionTimeLimit>PT2H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Users\Cliente\Desktop\Portfolio\hub_vagas\venv\Scripts\python.exe</Command>
+      <Arguments>app\main.py</Arguments>
+      <WorkingDirectory>C:\Users\Cliente\Desktop\Portfolio\hub_vagas</WorkingDirectory>
+    </Exec>
+    <Exec>
+      <Command>C:\Users\Cliente\Desktop\Portfolio\hub_vagas\venv\Scripts\python.exe</Command>
+      <Arguments>app\transform.py</Arguments>
+      <WorkingDirectory>C:\Users\Cliente\Desktop\Portfolio\hub_vagas</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

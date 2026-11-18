@@ -53,6 +53,8 @@ models:
     marts:
       +schema: gold
       +materialized: table
+      +grants:
+        select: ['bi_reader']
     seeds:
       +schema: bronze
       +materialized: table

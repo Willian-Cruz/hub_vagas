@@ -17,7 +17,7 @@ Este documento rastreia o progresso das 20 melhorias identificadas na análise c
 
 | Item | Título | Fase | Status | Data | Evidência (commit/teste) | Subtarefas pendentes |
 |------|--------|------|--------|------|--------------------------|----------------------|
-| 0 | Preparação (baseline, inventário, checklist, AGENTS.md) | 0 | **em andamento** | 2026-11-19 | — | Baseline: unit 323 passed, 34 deselected; integration 9 failed, 19 passed (dbt build falhou, alguns testes de migration). Inventário: `seniority_service.py` e `test_seniority_service.py` citados no MAPA mas não existem no fonte; `dashboard_service.py` e `infojobs_parser.py` só como .pyc. Fixtures `catho_cards_2026_11.html` e `infojobs_cards_2026_11.html` existem. |
+| 0 | Preparação (baseline, inventário, checklist, AGENTS.md) | 0 | **feito** | 2026-11-19 | commit da5e5a5 | Baseline: unit 323 passed, 34 deselected; integration 9 failed, 19 passed (dbt build falhou, alguns testes de migration). Inventário: `seniority_service.py` e `test_seniority_service.py` citados no MAPA mas não existem no fonte; `dashboard_service.py` e `infojobs_parser.py` só como .pyc. Fixtures `catho_cards_2026_11.html` e `infojobs_cards_2026_11.html` existem. |
 
 ---
 
@@ -25,7 +25,7 @@ Este documento rastreia o progresso das 20 melhorias identificadas na análise c
 
 | Item | Título | Fase | Status | Data | Evidência | Subtarefas pendentes |
 |------|--------|------|--------|------|-----------|----------------------|
-| 18 | Higiene do repositório e segurança | 1 | `pendente` | — | — | `git rm` de HTML gigante e .pyc; completar .gitignore; limpar .env.example; pre-commit hooks; teste de fixtures sensíveis; auditoria histórico; CONTRIBUTING.md |
+| 18 | Higiene do repositório e segurança | 1 | **feito** | 2026-11-19 | commits: .gitignore, .pre-commit-config.yaml, test_fixtures_seguranca.py, docs/auditoria_historico.md, CONTRIBUTING.md | — |
 | 6a | Rede de segurança de integração (antes dos itens 1 e 2) | 1 | `pendente` | — | — | Marcador `integration` e fixture com `HUB_VAGAS_TEST_DATABASE_URL`; teste offline ponta a ponta; `unit_tests:` do dbt para senioridade/modalidade/salário; CI com service container postgres |
 | 1 | Bronze fiel: nunca alterar o HTML antes de gravar | 1 | `pendente` | — | — | Auditar scrapers/parsers por mutação de card; corrigir capturando str(card) antes; teste parametrizado para todos |
 | 2 | Senioridade: corrigir e ter uma única fonte da regra | 1 | `pendente` | — | — | Corrigir macro e NormalizeService (PL/SQL, Liderança); seed `seniority_rules.csv` como fonte única; preservar comportamento documentado; teste paridade Python↔SQL; `unit_tests:` dbt |

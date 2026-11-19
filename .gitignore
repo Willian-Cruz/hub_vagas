@@ -9,6 +9,7 @@ __pycache__/
 dbt/target/
 dbt/dbt_packages/
 dbt/logs/
+dbt/.user.yml
 
 # Virtual environments
 .venv/
@@ -28,6 +29,7 @@ desktop.ini
 *.tmp
 *.bak
 *.swp
+logs/
 
 # Test artifacts
 .pytest_cache/
@@ -47,7 +49,12 @@ debug_*.png
 
 # dbt profiles (gerado dinamicamente)
 dbt/profiles.yml
-dbt/.user.yml
+
+# Backup and archive files
+backup*.sql
+*.zip
+*.dump
+*.gz
 
 # ── Segurança: credenciais e segredos (nunca versionar) ─────────────────────
 .env

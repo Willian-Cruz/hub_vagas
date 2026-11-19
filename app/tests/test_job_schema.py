@@ -10,16 +10,12 @@ Valida:
 
 Execução: pytest app/tests/test_job_schema.py -v
 """
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
-
-from datetime import datetime, timezone
-from decimal import Decimal
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
-from schemas.job_schema import JobSchema
+
+from app.schemas.job_schema import JobSchema
 
 
 def _vaga_valida():
@@ -186,7 +182,7 @@ class TestCamposPreenchidos:
     """Campos preenchidos devem ser preservados exatamente como vieram."""
 
     def test_todos_campos_preenchidos(self):
-        agora = datetime(2026, 11, 17, 10, 30, 0, tzinfo=timezone.utc)
+        agora = datetime(2026, 11, 17, 10, 30, 0, tzinfo=UTC)
         vaga = JobSchema(
             titulo="Engenheiro de Dados Sênior",
             empresa="Empresa LTDA",

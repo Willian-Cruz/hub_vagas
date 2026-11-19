@@ -1,15 +1,12 @@
-import re
 import time
-from datetime import date, datetime
-from urllib.parse import urljoin, quote
+from datetime import date
+from urllib.parse import quote
 
 import requests
-from bs4 import BeautifulSoup
 
-from schemas.job_schema import JobSchema
-from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
-from scrapers.catho_parser import parse_cards
-from utils.text_utils import valor_ou_none
+from app.schemas.job_schema import JobSchema
+from app.scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
+from app.scrapers.catho_parser import parse_cards
 
 
 class CathoScraper(BaseScraper):

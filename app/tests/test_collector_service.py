@@ -1,5 +1,5 @@
-from services.collector_service import CollectorService
-from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
+from app.scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
+from app.services.collector_service import CollectorService
 
 
 class FakeScraper(BaseScraper):

@@ -10,11 +10,6 @@ Três erros que estes testes impedem de voltar:
 """
 from __future__ import annotations
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -22,9 +17,9 @@ from pathlib import Path
 import pytest
 from bs4 import BeautifulSoup
 
-from constants.selectors import INFOJOBS_JOB_CARD
-from scrapers.infojobs_scraper import InfoJobsScraper
-from utils.text_utils import normalizar_espacos
+from app.constants.selectors import INFOJOBS_JOB_CARD
+from app.scrapers.infojobs_scraper import InfoJobsScraper
+from app.utils.text_utils import normalizar_espacos
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

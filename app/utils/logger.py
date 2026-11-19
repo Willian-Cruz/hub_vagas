@@ -8,7 +8,7 @@ Por que logging em vez de print()?
     - Padrão da indústria para pipelines de dados
 
 Uso em qualquer módulo:
-    from utils.logger import get_logger, log_event
+    from app.utils.logger import get_logger, log_event
     logger = get_logger(__name__)
     logger.info("Mensagem informativa")
     logger.error("Algo deu errado")
@@ -32,6 +32,7 @@ Uso em qualquer módulo:
 import json
 import logging
 import os
+from datetime import UTC
 from logging.handlers import RotatingFileHandler
 
 # Diretório de logs sempre relativo à raiz do projeto
@@ -46,7 +47,7 @@ class JSONFormatter(logging.Formatter):
         entrada = {
             "timestamp": self.formatTime(record, datefmt="%Y-%m-%dT%H:%M:%S"),
             "level": record.levelname,
-            "component": record.name,
+            "component": getattr(record, "component", record.name),
             "mensagem": record.getMessage(),
         }
         # Campos extras passados via log_event ou extra=
@@ -140,10 +141,10 @@ def log_event(
          "event":"vagas_coletadas","status":"sucesso","duration_ms":1250,
          "records_received":28,"records_persisted":28,"records_rejected":0}
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     entrada = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "level": level,
     }
     if run_id is not None:

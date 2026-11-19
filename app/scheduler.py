@@ -16,24 +16,16 @@ Pressione Ctrl+C para encerrar.
 Para executar a transformação (dbt) separadamente:
     python app/transform.py
 """
-import sys
-import os
 import argparse
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from database.connection import (
+from app.database.connection import (
     engine,
     ensure_bronze_schema,
     ensure_local_database_exists,
 )
-from database.models import base
-from database.job_model import Job
-from database.tech_model import Technology
-from database.job_tech_model import job_technologies
-from database.bronze_model import ScrapeRun
-from services.scheduler_service import SchedulerService
-from utils.logger import get_logger
+from app.database.models import base
+from app.services.scheduler_service import SchedulerService
+from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -68,8 +60,8 @@ def parse_args():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
-
+def main() -> int:
+    """Ponto de entrada para o agendador."""
     args = parse_args()
 
     # Cria tabelas no banco se ainda não existirem
@@ -92,3 +84,8 @@ if __name__ == "__main__":
             minuto=args.minuto,
             executar_transformacao=args.com_transformacao,
         )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

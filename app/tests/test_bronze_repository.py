@@ -3,17 +3,13 @@ Testes do BronzeRepository: gravação de scrape_runs na camada Bronze.
 
 Execução: pytest tests/test_bronze_repository.py -v
 """
-import os
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from repositories.bronze_repository import BronzeRepository
-from schemas.job_schema import JobSchema
-from scrapers.base_scraper import ScrapeResult, ScrapeStatus
+from app.repositories.bronze_repository import BronzeRepository
+from app.schemas.job_schema import JobSchema
+from app.scrapers.base_scraper import ScrapeResult, ScrapeStatus
 
 
 def _resultado(vagas=None, source="Vagas.com"):
@@ -38,9 +34,9 @@ def _vaga(**campos):
 
 def _persistir(resultados):
     sessao = MagicMock()
-    with patch("repositories.bronze_repository.SessionLocal", MagicMock(return_value=sessao)):
+    with patch("app.repositories.bronze_repository.SessionLocal", MagicMock(return_value=sessao)):
         total = BronzeRepository.persistir_resultados(
-            resultados, uuid4(), datetime.now(timezone.utc)
+            resultados, uuid4(), datetime.now(UTC)
         )
     return total, sessao
 
@@ -58,10 +54,10 @@ class TestGravacaoScrapeRun:
         sessao = MagicMock()
         sessao.commit.side_effect = RuntimeError("falhou")
 
-        with patch("repositories.bronze_repository.SessionLocal", MagicMock(return_value=sessao)):
+        with patch("app.repositories.bronze_repository.SessionLocal", MagicMock(return_value=sessao)):
             try:
                 BronzeRepository.persistir_resultados(
-                    [_resultado([_vaga()])], uuid4(), datetime.now(timezone.utc)
+                    [_resultado([_vaga()])], uuid4(), datetime.now(UTC)
                 )
                 assert False, "deveria propagar o erro"
             except RuntimeError:

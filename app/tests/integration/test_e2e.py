@@ -21,83 +21,15 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import text
 
-from repositories.job_repository import (
-    JobRepository,
+from app.repositories.job_repository import (
     DUPLICADA,
     ERRO,
     SALVA,
-    _payload_hash,
-    _raw_payload_de_vaga,
-)
-from schemas.job_schema import JobSchema
-
-
-def _inserir_raw(conexao, run_id, vaga_dict):
-    """Insere uma observação bruta diretamente na tabela raw (simula scraper)."""
-    vaga = JobSchema(**vaga_dict)
-    payload = _raw_payload_de_vaga(vaga)
-    payload_hash = _payload_hash(payload)
-
-    conexao.execute(
-        text(
-            """
-            INSERT INTO raw.job_observations
-                (run_id, source, source_job_id, collected_at, ingested_at,
-                 link, scraper_version, payload_hash, raw_payload, is_relevant)
-            VALUES
-                (:run_id, :source, :source_job_id, :collected_at, :ingested_at,
-                 :link, :scraper_version, :payload_hash, CAST(:raw_payload AS jsonb), :is_relevant)
-            """
-        ),
-        {
-            "run_id": run_id,
-            "source": vaga_dict.get("origem", "Vagas.com"),
-            "source_job_id": vaga_dict.get("id_externo"),
-            "collected_at": vaga_dict.get("collected_at"),
-            "ingested_at": vaga_dict.get("ingested_at", vaga_dict.get("collected_at")),
-            "link": vaga_dict.get("link"),
-            "scraper_version": vaga_dict.get("scraper_version", "1.0.0"),
-            "payload_hash": payload_hash,
-            "raw_payload": json.dumps(payload),
-            "is_relevant": vaga_dict.get("is_relevant", True),
-        },
-    )
-    conexao.commit()
-
-
-"""
-Testes de integração E2E — Fluxo completo Raw → Silver → Gold.
-
-Cenários obrigatórios (M08):
-  A — Pipeline com sucesso: vaga válida coletada, persistida, transformada,
-      disponibilizada no mart analítico.
-  B — Dados incompletos: vaga sem salário/localização preservada com NULLs.
-  C — Duplicidade: mesma publicação recebida mais de uma vez, dedup respeitada.
-  D — Fonte indisponível: falha registrada, status correto.
-  E — Banco indisponível: persistência falha, sucesso não registrado indevidamente.
-  F — Falha de transformação: dbt build falha, dados analíticos não marcados como atualizados.
-  G — Alteração inesperada na fonte: formato da resposta muda, scraper trata controladamente.
-
-Execução (CI com services: postgres):
-    pytest app/tests/integration/test_e2e.py -m integration -v
-"""
-import json
-import sys
-from unittest.mock import patch
-from uuid import uuid4
-
-import pytest
-from sqlalchemy import text
-
-from repositories.job_repository import (
     JobRepository,
-    DUPLICADA,
-    ERRO,
-    SALVA,
     _payload_hash,
     _raw_payload_de_vaga,
 )
-from schemas.job_schema import JobSchema
+from app.schemas.job_schema import JobSchema
 
 
 def _inserir_raw(conexao, run_id, vaga_dict):
@@ -135,7 +67,7 @@ def _inserir_raw(conexao, run_id, vaga_dict):
 
 def _executar_dbt_build():
     """Executa o dbt build e retorna o código de saída."""
-    from run_dbt import main as executar_dbt
+    from app.run_dbt import main as executar_dbt
     return executar_dbt(["build"])
 
 
@@ -419,7 +351,7 @@ class TestCenarioEBancoIndisponivel:
         )
 
         with patch(
-            "repositories.job_repository.SessionLocal"
+            "app.repositories.job_repository.SessionLocal"
         ) as mock_session_local:
             mock_session = mock_session_local.return_value
             mock_session.execute.side_effect = Exception("conexão perdida")
@@ -438,10 +370,10 @@ class TestCenarioFFalhaTransformacao:
         Simula falha de dbt build verificando que o transform.py retorna
         código de saída diferente de zero quando o dbt falha.
         """
-        from run_dbt import main as executar_dbt
+        from app.run_dbt import main as executar_dbt
 
         # Mock do subprocess para simular falha do dbt
-        with patch("run_dbt.subprocess.run") as mock_run:
+        with patch("app.run_dbt.subprocess.run") as mock_run:
             mock_run.return_value.returncode = 1
 
             codigo = executar_dbt(["build"])

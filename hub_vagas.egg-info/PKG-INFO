@@ -2,6 +2,6 @@ Metadata-Version: 2.4
 Name: hub_vagas
 Version: 1.0.0
 Summary: Pipeline de dados que coleta vagas de Dados e Tecnologia em portais brasileiros
-Requires-Python: >=3.11
+Requires-Python: ==3.11.*
 License-File: LICENSE
 Dynamic: license-file

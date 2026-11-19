@@ -9,24 +9,19 @@ Estratégia:
 
 Execução: pytest tests/test_job_repository.py -v
 """
-import os
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
-
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
-from uuid import uuid4
 
-from repositories.job_repository import (
-    JobRepository,
+from app.repositories.job_repository import (
     DUPLICADA,
     ERRO,
     REVISADA,
     SALVA,
+    JobRepository,
     _payload_hash,
     _raw_payload_de_vaga,
 )
-from schemas.job_schema import JobSchema
+from app.schemas.job_schema import JobSchema
 
 
 def _vaga(
@@ -81,7 +76,7 @@ class TestSalvaEDedup:
     def test_vaga_nova_retorna_salva_e_commita(self):
         session_class, session = _mock_session(fetchone_return=None)
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             assert JobRepository.salvar(_vaga()) == SALVA
 
         # SELECT de dedup + INSERT da nova observação
@@ -93,7 +88,7 @@ class TestSalvaEDedup:
         vaga = _vaga()
         session_class, session = _mock_session(fetchone_return=(_hash_da(vaga),))
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             assert JobRepository.salvar(vaga) == DUPLICADA
 
         # Apenas o SELECT de dedup; nenhum INSERT nem commit
@@ -106,7 +101,7 @@ class TestSalvaEDedup:
         outro_hash = "0" * 64
         session_class, session = _mock_session(fetchone_return=(outro_hash,))
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             assert JobRepository.salvar(vaga) == REVISADA
 
         session.commit.assert_called_once()
@@ -114,7 +109,7 @@ class TestSalvaEDedup:
     def test_primeira_coleta_retorna_salva(self):
         session_class, session = _mock_session(fetchone_return=None)
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             assert JobRepository.salvar(_vaga()) == SALVA
 
         session.commit.assert_called_once()
@@ -122,7 +117,7 @@ class TestSalvaEDedup:
     def test_id_externo_none_nao_impede_a_gravacao(self):
         session_class, session = _mock_session(fetchone_return=None)
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             assert JobRepository.salvar(_vaga(id_externo=None)) == SALVA
 
         session.commit.assert_called_once()
@@ -131,7 +126,7 @@ class TestSalvaEDedup:
         session_class, session = _mock_session(fetchone_return=None)
         session.commit.side_effect = Exception("conexão perdida")
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             assert JobRepository.salvar(_vaga()) == ERRO
 
         session.rollback.assert_called_once()
@@ -142,7 +137,7 @@ class TestSessao:
     def test_sessao_fechada_apos_sucesso(self):
         session_class, session = _mock_session(fetchone_return=None)
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             JobRepository.salvar(_vaga())
 
         session.close.assert_called_once()
@@ -151,7 +146,7 @@ class TestSessao:
         session_class, session = _mock_session(fetchone_return=None)
         session.commit.side_effect = Exception("falha")
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             JobRepository.salvar(_vaga())
 
         session.close.assert_called_once()
@@ -163,7 +158,7 @@ class TestSemNormalizacao:
         """senioridade/local/empresa ficam exatamente como vieram do scraper."""
         session_class, session = _mock_session(fetchone_return=None)
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             JobRepository.salvar(
                 _vaga(
                     senioridade="Jr.",
@@ -187,7 +182,7 @@ class TestSemNormalizacao:
         vaga = _vaga()
         vaga.raw_payload = {"html_fragment": "<li>...</li>"}
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             JobRepository.salvar(vaga)
 
         import json as _json
@@ -196,11 +191,11 @@ class TestSemNormalizacao:
         assert payload["_raw_payload_scraper"] == {"html_fragment": "<li>...</li>"}
 
     def test_collected_at_usa_datetime_now(self):
-        momento_fixo = datetime(2026, 11, 17, 2, 0, 0, tzinfo=timezone.utc)
+        momento_fixo = datetime(2026, 11, 17, 2, 0, 0, tzinfo=UTC)
         session_class, session = _mock_session(fetchone_return=None)
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
-            with patch("repositories.job_repository.datetime") as mock_dt:
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
+            with patch("app.repositories.job_repository.datetime") as mock_dt:
                 mock_dt.now.return_value = momento_fixo
                 JobRepository.salvar(_vaga())
 

@@ -3,11 +3,11 @@
 Cada vaga é um <li data-offer-item="ID"> com:
 
   span.tag              "Publicada|Atualizada" + "Hoje" | "Ontem" | "em dd/mm" (sem ano).
-                        A classe CSS (pub_hoje / pub_ontem) NÃO é confiável: "Publicada em 26/10"
-                        também vem com pub_ontem. Vale o texto.
+                         A classe CSS (pub_hoje / pub_ontem) NÃO é confiável: "Publicada em 26/10"
+                         também vem com pub_ontem. Vale o texto.
   h2.title_offer a      título e href (/vagas/<slug>/<id>)
   article > p           empresa: primeiro <span>. Anônima = "Empresa Confidencial" + <button>Por que?</button>
-                        (por isso não se usa o texto do <p> inteiro)
+                         (por isso não se usa o texto do <p> inteiro)
   p com .i_job_location "<strong>N vaga(s)</strong> - Cidade"  (sem UF; N é a quantidade de posições)
   p com .i_salary       "R$ 3.675 + 2 benefícios" | "A Combinar" | "A partir de R$ 3.000,00" | "Até R$ 2.000,00"
 
@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup, Tag
 
-from scrapers.parser_utils import (
+from app.scrapers.parser_utils import (
     CardParseado,
     empresa_ou_none,
     limpar,

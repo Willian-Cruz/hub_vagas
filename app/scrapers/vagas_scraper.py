@@ -1,14 +1,13 @@
 import re
 import time
 from datetime import date
-from typing import Optional
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
 
-from constants.selectors import (
+from app.constants.selectors import (
     VAGAS_COMPANY,
     VAGAS_DATE,
     VAGAS_DESCRIPTION,
@@ -19,10 +18,10 @@ from constants.selectors import (
     VAGAS_SENIORITY,
     VAGAS_TITLE,
 )
-from schemas.job_schema import JobSchema
-from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
-from utils.date_utils import parse_data_vagas
-from utils.text_utils import normalizar_espacos, valor_ou_none
+from app.schemas.job_schema import JobSchema
+from app.scrapers.base_scraper import BaseScraper
+from app.utils.date_utils import parse_data_vagas
+from app.utils.text_utils import normalizar_espacos, valor_ou_none
 
 
 class VagasScraper(BaseScraper):
@@ -158,14 +157,14 @@ class VagasScraper(BaseScraper):
         return cls._parsear_detalhado(html)[0]
 
     @staticmethod
-    def _texto(elemento) -> Optional[str]:
+    def _texto(elemento) -> str | None:
         """Texto do elemento sem espaços repetidos; None se vazio ou placeholder."""
         if elemento is None:
             return None
         return valor_ou_none(elemento.get_text(" ", strip=True))
 
     @classmethod
-    def _extrair_local(cls, card) -> Optional[str]:
+    def _extrair_local(cls, card) -> str | None:
         """Local do card, sem o balão "A empresa aceita candidaturas de ..."."""
         elemento = card.select_one(VAGAS_LOCATION)
         if elemento is None:
@@ -176,7 +175,7 @@ class VagasScraper(BaseScraper):
         return valor_ou_none(texto.split("A empresa aceita")[0])
 
     @classmethod
-    def _extrair_modalidade(cls, card) -> Optional[str]:
+    def _extrair_modalidade(cls, card) -> str | None:
         """Infere modalidade a partir do texto do local (ex: '100% Home Office')."""
         elemento = card.select_one(VAGAS_LOCATION)
         if elemento is None:
@@ -193,7 +192,7 @@ class VagasScraper(BaseScraper):
 
     @classmethod
     def _parsear_detalhado(
-        cls, html: str, referencia: Optional[date] = None
+        cls, html: str, referencia: date | None = None
     ) -> tuple[list[JobSchema], int, int]:
         """Devolve (vagas válidas, cards inválidos, total de cards).
 

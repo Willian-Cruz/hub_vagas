@@ -11,22 +11,18 @@ e extraia só os cards (li.vaga / div.js_vacancyLoad).
 
 Execução: pytest tests/test_parsers_html_real.py -v
 """
-import os
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from datetime import date, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock
 
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from scrapers.base_scraper import ScrapeStatus
-from scrapers.infojobs_scraper import InfoJobsScraper
-from scrapers.vagas_scraper import VagasScraper
-from services.relevance_service import RelevanceService
+from app.scrapers.base_scraper import ScrapeStatus
+from app.scrapers.infojobs_scraper import InfoJobsScraper
+from app.scrapers.vagas_scraper import VagasScraper
+from app.services.relevance_service import RelevanceService
 
 FIXTURES = Path(__file__).parent / "fixtures"
 REFERENCIA = date(2026, 11, 3)  # dia da coleta das fixtures

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -13,30 +13,30 @@ class JobSchema(BaseModel):
     """
 
     titulo: str
-    empresa: Optional[str] = None
-    senioridade: Optional[str] = None
-    localizacao: Optional[str] = None
-    descricao: Optional[str] = None
-    salario: Optional[str] = None
+    empresa: str | None = None
+    senioridade: str | None = None
+    localizacao: str | None = None
+    descricao: str | None = None
+    salario: str | None = None
     link: str
     origem: str
 
     # URL da página de detalhe da vaga (quando o scraper consegue navegar até ela).
     # Usado para deep scraping: captura descrição completa e salário do card detalhado.
-    detail_url: Optional[str] = None
+    detail_url: str | None = None
 
     # Identificação e metadados que o card do portal já traz
-    id_externo: Optional[str] = None        # ID da vaga no portal (estável entre coletas)
-    data_publicacao: Optional[datetime] = None
-    modalidade: Optional[str] = None        # Presencial / Híbrido / Remoto
-    experiencia: Optional[str] = None       # ex.: "Sem experiência", "Entre 1 e 3 anos"
-    escolaridade: Optional[str] = None      # ex.: "Ensino Superior"
-    qtd_posicoes: Optional[int] = None      # ex.: "Pleno - 2 vagas" -> 2
+    id_externo: str | None = None        # ID da vaga no portal (estável entre coletas)
+    data_publicacao: datetime | None = None
+    modalidade: str | None = None        # Presencial / Híbrido / Remoto
+    experiencia: str | None = None       # ex.: "Sem experiência", "Entre 1 e 3 anos"
+    escolaridade: str | None = None      # ex.: "Ensino Superior"
+    qtd_posicoes: int | None = None      # ex.: "Pleno - 2 vagas" -> 2
 
     # Filtro de relevância: True quando o título casa com termos_relevancia.csv.
     # Quando False, motivo_relevancia registra por que foi descartada.
     is_relevant: bool = True
-    motivo_relevancia: Optional[str] = None
+    motivo_relevancia: str | None = None
 
     # O fragmento é mantido para Bronze, mas não integra o contrato normalizado.
     raw_payload: dict[str, Any] = Field(default_factory=dict, exclude=True)
@@ -44,7 +44,7 @@ class JobSchema(BaseModel):
     # Linhagem de dados (M09): versão do scraper que coletou esta vaga,
     # gravada em raw.job_observations.scraper_version para permitir rastrear
     # qualquer registro da Gold de volta à execução original.
-    scraper_version: Optional[str] = "1.0.0"
+    scraper_version: str | None = "1.0.0"
 
     @field_validator("titulo")
     @classmethod

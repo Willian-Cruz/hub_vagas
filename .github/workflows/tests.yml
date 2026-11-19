@@ -22,10 +22,10 @@ jobs:
       - name: Checkout do codigo
         uses: actions/checkout@v4
 
-      - name: Configurar Python 3.12
+      - name: Configurar Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
 
       - name: Instalar pip-tools
@@ -51,10 +51,10 @@ jobs:
       - name: Checkout do codigo
         uses: actions/checkout@v4
 
-      - name: Configurar Python 3.12
+      - name: Configurar Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
 
       - name: Instalar ruff
@@ -73,10 +73,10 @@ jobs:
       - name: Checkout do codigo
         uses: actions/checkout@v4
 
-      - name: Configurar Python 3.12
+      - name: Configurar Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
 
       - name: Instalar dependencias de producao e desenvolvimento
@@ -111,10 +111,10 @@ jobs:
       - name: Checkout do codigo
         uses: actions/checkout@v4
 
-      - name: Configurar Python 3.12
+      - name: Configurar Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
 
       - name: Instalar dependencias de producao e desenvolvimento
@@ -163,10 +163,10 @@ jobs:
       - name: Checkout do codigo
         uses: actions/checkout@v4
 
-      - name: Configurar Python 3.12
+      - name: Configurar Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
 
       - name: Instalar dependencias de producao e desenvolvimento
@@ -238,10 +238,10 @@ jobs:
       - name: Checkout do codigo
         uses: actions/checkout@v4
 
-      - name: Configurar Python 3.12
+      - name: Configurar Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
 
       - name: Instalar dependencias e pip-audit

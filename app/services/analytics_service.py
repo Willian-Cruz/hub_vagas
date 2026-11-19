@@ -1,7 +1,7 @@
 import pandas as pd
 from sqlalchemy import text
-from database.connection import engine
-from services.export_service import ExportService
+
+from app.database.connection import engine
 
 
 class AnalyticsService:

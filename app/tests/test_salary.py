@@ -2,13 +2,7 @@
 Testes unitários para SalaryService (Sprint 5)
 Execução: pytest tests/test_salary_service.py -v
 """
-import sys
-import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
-
-import pytest
-from services.salary_service import SalaryService
+from app.services.salary_service import SalaryService
 
 
 class TestExtrairSalario:

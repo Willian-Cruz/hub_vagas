@@ -3,7 +3,7 @@ conftest.py — configuração para testes de integração com PostgreSQL.
 
 Configura:
 - DATABASE_URL apontando para o banco de teste (PostgreSQL via services: postgres no CI)
-- Aplicação automática de migrations antes dos testes
+- Aplicação automática de migrations via infra/migrate.py antes dos testes
 - Limpeza das tabelas entre testes para isolamento
 
 Execução local:
@@ -20,15 +20,12 @@ from sqlalchemy import create_engine, text
 
 # ── Restaurar database.connection real (o conftest raiz o mocka globalmente) ──
 # Os testes de integração precisam do SQLAlchemy real conectado ao PostgreSQL.
-if "database.connection" in sys.modules:
-    del sys.modules["database.connection"]
-from database.connection import engine as _real_engine  # noqa: F401  (garante import real)
+if "app.database.connection" in sys.modules:
+    del sys.modules["app.database.connection"]
+from app.database.connection import engine as _real_engine  # noqa: F401  (garante import real)
 
 # Carrega variáveis de ambiente do .env se existir
 load_dotenv()
-
-# Adiciona raiz do projeto ao path para imports de infra/
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 DB_URL = os.getenv(
     "DATABASE_URL",
@@ -47,14 +44,29 @@ def engine():
 
 
 @pytest.fixture(scope="session", autouse=True)
-def aplicar_migrations(engine):
-    """Aplica todas as migrations SQL antes dos testes de integração."""
-    sql_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
-    with engine.connect() as conn:
-        for sql_file in sql_files:
-            sql = sql_file.read_text(encoding="utf-8")
-            conn.execute(text(sql))
-            conn.commit()
+def aplicar_migrations_via_executor(engine):
+    """Aplica todas as migrations usando o executor infra/migrate.py antes dos testes de integração.
+    
+    Isso valida que o executor de migrations funciona corretamente, em vez de
+    aplicar SQL diretamente (que não testa o executor).
+    """
+    # Importa o módulo migrate com engine mockado
+    import sys
+    infra_dir = str(Path(__file__).resolve().parents[3] / "infra")
+    if infra_dir not in sys.path:
+        sys.path.insert(0, infra_dir)
+    
+    import migrate
+    from unittest.mock import patch
+    
+    with patch.object(migrate, 'MIGRATIONS_DIR', MIGRATIONS_DIR):
+        with patch.object(migrate, 'engine_para_banco', return_value=engine):
+            # Executa o migrate main (aplica pendentes)
+            sys.argv = ["migrate"]
+            result = migrate.main()
+            if result != 0:
+                pytest.fail(f"Falha ao aplicar migrations via infra/migrate.py (código {result})")
+    
     yield
 
 

@@ -1,4 +1,4 @@
-from services.tech_service import TechnologyService
+from app.services.tech_service import TechnologyService
 
 
 def test_extrair_tecnologias_com_limites_de_palavra():

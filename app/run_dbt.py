@@ -15,8 +15,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy.engine import make_url
 
-from utils.logger import get_logger, log_event
-
+from app.notifier import alertar_dbt_falha
+from app.utils.logger import get_logger, log_event
 
 logger = get_logger(__name__)
 
@@ -136,6 +136,7 @@ def main(argv: list[str] | None = None) -> int:
             duration_ms=round(duracao_dbt * 1000, 2),
             mensagem=f"dbt {subcomando} falhou com código {codigo_retorno} após {duracao_dbt}s",
         )
+        alertar_dbt_falha(run_id, subcomando, codigo_retorno, duracao_dbt)
 
     return codigo_retorno
 

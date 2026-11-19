@@ -5,13 +5,11 @@ PostgreSQL usado pelo PipelineService.
 """
 import threading
 import time
-from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
 
-from services.pipeline_service import ADVISORY_LOCK_KEY, PipelineService
-
+from app.services.pipeline_service import ADVISORY_LOCK_KEY, PipelineService
 
 DB_URL = "postgresql+psycopg://hub_vagas:hub_vagas@localhost:5432/hub_vagas_test"
 

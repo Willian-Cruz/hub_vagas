@@ -1,10 +1,10 @@
-import main
-from repositories.bronze_repository import BronzeRepository
-from repositories.job_repository import DUPLICADA, ERRO, JobRepository, REVISADA, SALVA
-from schemas.job_schema import JobSchema
-from scrapers.base_scraper import ScrapeResult, ScrapeStatus
-from services.collector_service import CollectorService
-from services.pipeline_service import PipelineService
+import app.main as main
+from app.repositories.bronze_repository import BronzeRepository
+from app.repositories.job_repository import ERRO, SALVA, JobRepository
+from app.schemas.job_schema import JobSchema
+from app.scrapers.base_scraper import ScrapeResult, ScrapeStatus
+from app.services.collector_service import CollectorService
+from app.services.pipeline_service import PipelineService
 
 
 def _vaga():
@@ -31,7 +31,7 @@ def test_pipeline_registra_falha_da_fonte(monkeypatch):
     resultado = ScrapeResult(
         source="InfoJobs",
         status=ScrapeStatus.FAILED,
-        error="certificado TLS inválido",
+        error="certificado TLS invalido",
     )
     monkeypatch.setattr(CollectorService, "coletar_resultados", lambda: [resultado])
     _mock_persistence(monkeypatch)
@@ -45,7 +45,7 @@ def test_pipeline_registra_falha_da_fonte(monkeypatch):
             "status": "failed",
             "vagas": 0,
             "paginas": 0,
-            "erro": "certificado TLS inválido",
+            "erro": "certificado TLS invalido",
             "descartadas": 0,
         }
     ]
@@ -57,7 +57,7 @@ def test_pipeline_persiste_vagas_parciais_como_sucesso(monkeypatch):
         status=ScrapeStatus.PARTIAL,
         jobs=[_vaga()],
         pages_processed=1,
-        error="falha ao buscar a página seguinte",
+        error="falha ao buscar a pagina seguinte",
     )
     monkeypatch.setattr(CollectorService, "coletar_resultados", lambda: [resultado])
     _mock_persistence(monkeypatch)
@@ -65,16 +65,16 @@ def test_pipeline_persiste_vagas_parciais_como_sucesso(monkeypatch):
     metricas = PipelineService.executar()
 
     assert metricas["sucesso"] is True  # PARTIAL com vagas = sucesso
-    assert metricas["status"] == "PARTIAL"  # mas não é SUCESSO total
+    assert metricas["status"] == "PARTIAL"  # mas nao e SUCCESS total
     assert metricas["coletadas"] == 1
-    assert metricas["raw_novas"] == 1
+    assert metricas["records_inserted"] == 1
     assert metricas["bronze_ok"] is True
     assert metricas["fontes_parcial"] == 1
     assert metricas["fontes_falha"] == 0
 
 
 def test_pipeline_todas_fontes_sucesso_marca_execucao_como_sucesso(monkeypatch):
-    """Quando todas as fontes têm SUCCESS, o status é SUCESSO."""
+    """Quando todas as fontes têm SUCCESS, o status é SUCCESS."""
     resultado = ScrapeResult(
         source="Vagas.com",
         status=ScrapeStatus.SUCCESS,
@@ -87,9 +87,9 @@ def test_pipeline_todas_fontes_sucesso_marca_execucao_como_sucesso(monkeypatch):
     metricas = PipelineService.executar()
 
     assert metricas["sucesso"] is True
-    assert metricas["status"] == "SUCESSO"
+    assert metricas["status"] == "SUCCESS"
     assert metricas["coletadas"] == 1
-    assert metricas["raw_novas"] == 1
+    assert metricas["records_inserted"] == 1
     assert metricas["fontes_sucesso"] == 1
     assert metricas["fontes_falha"] == 0
 
@@ -138,9 +138,9 @@ def test_pipeline_considera_erro_de_persistencia_como_falha(monkeypatch):
     metricas = PipelineService.executar()
 
     assert metricas["sucesso"] is False
-    assert metricas["status"] == "FALHADO"
-    assert metricas["raw_erros"] == 1
-    assert metricas["raw_novas"] == 0
+    assert metricas["status"] == "FAILED"
+    assert metricas["records_rejected"] == 1
+    assert metricas["records_inserted"] == 0
 
 
 def test_pipeline_converte_excecao_geral_em_falha(monkeypatch):

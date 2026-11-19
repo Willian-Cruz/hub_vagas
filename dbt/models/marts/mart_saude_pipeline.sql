@@ -18,18 +18,18 @@ with execucoes as (
     select
         source as origem,
         count(*) as total_execucoes,
-        count(*) filter (where status = 'success') as sucessos,
-        count(*) filter (where status = 'failed') as falhas,
-        count(*) filter (where status = 'partial') as parciais,
-        count(*) filter (where status = 'empty') as vazias,
-        max(finished_at) filter (where status = 'success') as ultima_coleta_sucesso,
-        max(finished_at) filter (where status in ('success', 'partial')) as ultima_tentativa,
+        count(*) filter (where status = 'SUCCESS') as sucessos,
+        count(*) filter (where status = 'FAILED') as falhas,
+        count(*) filter (where status = 'PARTIAL') as parciais,
+        count(*) filter (where status = 'EMPTY') as vazias,
+        max(finished_at) filter (where status = 'SUCCESS') as ultima_coleta_sucesso,
+        max(finished_at) filter (where status in ('SUCCESS', 'PARTIAL')) as ultima_tentativa,
         max(started_at) as ultima_inicio,
         avg(extract(epoch from (finished_at - started_at))) as duracao_media_seg,
         max(extract(epoch from (finished_at - started_at))) as duracao_maxima_seg,
         sum(jobs_found) as total_vagas_coletadas,
         avg(jobs_found) as media_vagas_por_execucao,
-        max(error) filter (where status = 'failed') as ultimo_erro
+        max(error) filter (where status = 'FAILED') as ultimo_erro
     from {{ source('bronze', 'scrape_runs') }}
     group by source
 ),

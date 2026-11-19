@@ -11,12 +11,7 @@ Uso:
     python app/transform.py              # build (modelos + testes)
     python app/transform.py source freshness  # verificar frescor das fontes
 """
-import sys
-import os
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from run_dbt import main as executar_dbt
+from app.run_dbt import main as executar_dbt
 
 
 def main() -> int:

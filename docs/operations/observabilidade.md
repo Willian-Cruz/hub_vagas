@@ -23,7 +23,7 @@ por evento), permitindo filtragem por `run_id`, `source`, `component`, `stage`,
 | `component` | string | Componente que gerou o evento (scraper, repository, pipeline, dbt) |
 | `stage` | string | Etapa do pipeline (coleta, persistencia, transformacao, exportacao) |
 | `event` | string | Nome do evento (vagas_coletadas, vaga_inserida, dbt_build_concluido, etc.) |
-| `status` | string | Resultado: sucesso, falha, parcial, vazio |
+| `status` | string | Resultado: SUCCESS, PARTIAL, FAILED, EMPTY |
 | `duration_ms` | number | Duração da etapa em milissegundos |
 | `records_received` | number | Registros recebidos na etapa |
 | `records_persisted` | number | Registros persistidos no banco |
@@ -66,7 +66,7 @@ O `PipelineService.executar()` retorna um dicionário com métricas completas:
 | Métrica | Descrição |
 |---------|-----------|
 | `run_id` | UUID da execução |
-| `status` | SUCESSO, PARCIAL ou FALHADO |
+| `status` | SUCCESS, PARTIAL ou FAILED |
 | `started_at` | ISO-8601 UTC do início |
 | `finished_at` | ISO-8601 UTC do término |
 | `duration_seconds` | Duração em segundos |
@@ -189,12 +189,12 @@ select * from gold.mart_saude_pipeline;
 
 | Valor | Condição |
 |-------|----------|
-| `saudavel` | ≥80% de sucesso e coleta recente |
-| `falhas_intermitentes` | Tem falhas mas também sucessos |
-| `sempre_falha` | Apenas falhas, nenhum sucesso |
-| `baixa_confiabilidade` | Taxa de sucesso < 80% |
-| `dados_desatualizados` | Último sucesso há mais de 72h |
-| `sem_coleta_sucesso` | Nunca teve uma coleta com sucesso |
+| `saudavel` | ≥80% de SUCCESS e coleta recente |
+| `falhas_intermitentes` | Tem FAILED mas também SUCCESS |
+| `sempre_falha` | Apenas FAILED, nenhum SUCCESS |
+| `baixa_confiabilidade` | Taxa de SUCCESS < 80% |
+| `dados_desatualizados` | Último SUCCESS há mais de 72h |
+| `sem_coleta_sucesso` | Nunca teve uma coleta com SUCCESS |
 
 ---
 
@@ -205,17 +205,17 @@ via `app/notifier.py`):
 
 | Condição | Severidade | Canal | Ação |
 |----------|------------|-------|------|
-| Fonte sem execução no período esperado (>72h sem sucesso) | warn | Webhook/E-mail | Verificar scraper da fonte |
-| Falhas consecutivas (3 execuções seguidas com status=failed) | error | Webhook/E-mail | Investigar scraper/banco |
+| Fonte sem execução no período esperado (>72h sem SUCCESS) | warn | Webhook/E-mail | Verificar scraper da fonte |
+| Falhas consecutivas (3 execuções seguidas com status=FAILED) | error | Webhook/E-mail | Investigar scraper/banco |
 | Queda de volume >50% frente à média semanal | error | Webhook/E-mail | Verificar portal/filtro de relevância |
 | Aumento de rejeições (desvio de qualidade >10pp vs mediana 7d) | warn | Webhook/E-mail | Recalibrar parser |
 | Falha crítica de persistência (raw erros > 0 em execução) | error | Webhook/E-mail | Verificar banco/conexão |
 | Falha em modelos dbt (dbt build com ERROR) | error | Webhook/E-mail | Verificar modelos SQL |
-| Dados desatualizados (último sucesso >72h) | warn | Webhook/E-mail | Verificar agendamento |
+| Dados desatualizados (último SUCCESS >72h) | warn | Webhook/E-mail | Verificar agendamento |
 
 ### Não notificar (evitar alertas excessivos)
 
-- Fonte com status `empty` (nenhuma vaga encontrada, mas coleta funcionou)
+- Fonte com status `EMPTY` (nenhuma vaga encontrada, mas coleta funcionou)
 - Primeira execução de uma fonte nova (sem histórico para comparar)
 - Warnings de freshness entre 24h e 72h (apenas log, sem notificação)
 

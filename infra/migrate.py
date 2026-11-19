@@ -28,7 +28,7 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 
 
 def engine_para_banco():
-    from config.settings import DATABASE_URL
+    from app.config.settings import DATABASE_URL
 
     url = DATABASE_URL
     if isinstance(url, str) and url.startswith("postgres://"):

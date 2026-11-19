@@ -1,4 +1,4 @@
-from database.job_tech_model import job_technologies
+from app.database.job_tech_model import job_technologies
 
 
 def test_job_technology_association_has_composite_primary_key():

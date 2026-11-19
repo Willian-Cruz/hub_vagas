@@ -1,9 +1,9 @@
 """Persistência append-only das coletas na camada Bronze."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
-from database.connection import SessionLocal
-from database.bronze_model import ScrapeRun
+from app.database.bronze_model import ScrapeRun
+from app.database.connection import SessionLocal
 
 
 class BronzeRepository:
@@ -20,7 +20,7 @@ class BronzeRepository:
 
         Retorna quantos registros de scrape_run foram gravados.
         """
-        finished_at = finished_at or datetime.now(timezone.utc)
+        finished_at = finished_at or datetime.now(UTC)
         session = SessionLocal()
 
         try:

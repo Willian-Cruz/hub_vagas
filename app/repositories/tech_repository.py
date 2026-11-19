@@ -1,5 +1,5 @@
-from database.tech_model import Technology
-from database.connection import SessionLocal
+from app.database.connection import SessionLocal
+from app.database.tech_model import Technology
 
 
 class TechnologyRepository:

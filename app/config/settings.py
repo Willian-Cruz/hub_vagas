@@ -6,9 +6,10 @@ A DATABASE_URL é montada automaticamente a partir dessas variáveis,
 ou pode ser definida diretamente via DATABASE_URL.
 """
 
+import os
+
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL
-import os
 
 load_dotenv(encoding="utf-8")
 

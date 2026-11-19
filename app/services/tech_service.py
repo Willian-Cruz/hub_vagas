@@ -1,7 +1,6 @@
 import re
-from typing import Optional
 
-from utils.seeds import carregar_seed
+from app.utils.seeds import carregar_seed
 
 
 class TechnologyService:

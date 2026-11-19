@@ -2,15 +2,15 @@
   config(
     severity = 'error',
     meta = {
-      'documentacao': 'Avalia precisão e recall da classificação de tecnologias '
+      'documentacao': 'Avalia precisao e recall da classificacao de tecnologias '
                       'usando um conjunto rotulado manualmente. Retorna apenas '
-                      'violações reais (falsos positivos e falsos negativos). '
-                      'Se não houver violações, o teste passa sem retornar linhas.'
+                      'violacoes reais (falsos positivos e falsos negativos) '
+                      'por tecnologia. Se nao houver violacoes, o teste passa sem retornar linhas.'
     }
   )
 }}
 
--- Conjunto de validação rotulado para classificação de tecnologias.
+-- Conjunto de validacao rotulado para classificacao de tecnologias.
 -- Para cada exemplo, verifica se o regex do dbt (word boundary, case-insensitive)
 -- casa corretamente com a tecnologia esperada.
 with exemplos as (
@@ -25,6 +25,8 @@ classificacao as (
         e.texto,
         e.tecnologia_esperada,
         e.deve_cascar,
+        e.justificativa,
+        e.categoria,
         t.tecnologia as tecnologia_teste,
         case
             when e.texto ~* ('\m' || regexp_replace(t.tecnologia, '([.*+?^${}()|[\]\\])', '\\\1', 'g') || '\M')
@@ -34,55 +36,97 @@ classificacao as (
     from exemplos e
     cross join tecnologias t
 ),
--- Para cada exemplo, verifica se a tecnologia esperada casou (quando deve) ou não casou (quando não deve).
+-- Para cada exemplo + tecnologia, verifica se a tecnologia casou quando deveria.
 resultado as (
     select
         texto,
         tecnologia_esperada,
         deve_cascar,
-        bool_or(case when tecnologia_teste = tecnologia_esperada then casou else false end) as esperado_casou,
-        bool_or(case when tecnologia_teste <> tecnologia_esperada then casou else false end) as falso_positivo_qualquer
+        justificativa,
+        categoria,
+        tecnologia_teste,
+        casou,
+        case
+            when tecnologia_teste = tecnologia_esperada and deve_cascar = 'sim' and casou then true
+            else false
+        end as verdadeiro_positivo,
+        case
+            when tecnologia_teste = tecnologia_esperada and deve_cascar = 'sim' and not casou then true
+            else false
+        end as falso_negativo,
+        case
+            when tecnologia_teste = tecnologia_esperada and deve_cascar = 'nao' and casou then true
+            else false
+        end as falso_positivo,
+        case
+            when tecnologia_teste = tecnologia_esperada and deve_cascar = 'nao' and not casou then true
+            else false
+        end as verdadeiro_negativo,
+        case
+            when tecnologia_teste <> tecnologia_esperada and casou then true
+            else false
+        end as casou_outra_tecnologia
     from classificacao
-    group by texto, tecnologia_esperada, deve_cascar
 ),
--- Violações reais: falsos negativos (deve cascar mas não casou)
--- e falsos positivos (não deve cascar mas casou).
+-- Agrega metricas por tecnologia avaliada
+metricas_por_tecnologia as (
+    select
+        tecnologia_esperada as tecnologia,
+        count(*) filter (where deve_cascar = 'sim') as total_positivos_esperados,
+        count(*) filter (where deve_cascar = 'nao') as total_negativos_esperados,
+        sum(case when verdadeiro_positivo then 1 else 0 end) as tp,
+        sum(case when falso_negativo then 1 else 0 end) as fn,
+        sum(case when falso_positivo then 1 else 0 end) as fp,
+        sum(case when verdadeiro_negativo then 1 else 0 end) as tn,
+        sum(case when casou_outra_tecnologia then 1 else 0 end) as interferencia_outras_techs,
+        case
+            when (sum(case when verdadeiro_positivo then 1 else 0 end) + sum(case when falso_positivo then 1 else 0 end)) > 0
+            then round(
+                sum(case when verdadeiro_positivo then 1 else 0 end)::numeric /
+                (sum(case when verdadeiro_positivo then 1 else 0 end) + sum(case when falso_positivo then 1 else 0 end)),
+                4
+            )
+            else null
+        end as precisao,
+        case
+            when (sum(case when verdadeiro_positivo then 1 else 0 end) + sum(case when falso_negativo then 1 else 0 end)) > 0
+            then round(
+                sum(case when verdadeiro_positivo then 1 else 0 end)::numeric /
+                (sum(case when verdadeiro_positivo then 1 else 0 end) + sum(case when falso_negativo then 1 else 0 end)),
+                4
+            )
+            else null
+        end as recall
+    from resultado
+    where tecnologia_teste = tecnologia_esperada
+    group by tecnologia_esperada
+),
+-- Violacoes reais: falsos negativos (deve cascar mas nao casou)
+-- e falsos positivos (nao deve cascar mas casou) -- apenas para a tecnologia esperada
 violacoes as (
     select
-        texto,
-        tecnologia_esperada,
-        deve_cascar,
-        caso
-    from (
-        select
-            texto,
-            tecnologia_esperada,
-            deve_cascar,
-            'falso_negativo' as caso
-        from resultado
-        where deve_cascar = 'sim'
-          and not esperado_casou
-        union all
-        select
-            texto,
-            tecnologia_esperada,
-            deve_cascar,
-            'falso_positivo' as caso
-        from resultado
-        where deve_cascar = 'não'
-          and falso_positivo_qualquer
-    ) v
+        r.texto,
+        r.tecnologia_esperada as tecnologia,
+        r.deve_cascar,
+        r.justificativa,
+        r.categoria,
+        case
+            when r.deve_cascar = 'sim' and not r.casou then 'falso_negativo'
+            when r.deve_cascar = 'nao' and r.casou then 'falso_positivo'
+        end as tipo_violacao
+    from resultado r
+    where r.tecnologia_teste = r.tecnologia_esperada
+      and (
+          (r.deve_cascar = 'sim' and not r.casou)
+          or (r.deve_cascar = 'nao' and r.casou)
+      )
 )
+-- Teste singular: retorna apenas as violacoes (deve retornar 0 linhas para passar)
 select
     texto,
-    tecnologia_esperada,
+    tecnologia,
     deve_cascar,
+    justificativa,
+    categoria,
     tipo_violacao
-from (
-    select
-        texto,
-        tecnologia_esperada,
-        deve_cascar,
-        caso as tipo_violacao
-    from violacoes
-) v
+from violacoes

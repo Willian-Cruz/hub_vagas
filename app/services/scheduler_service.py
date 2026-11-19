@@ -19,7 +19,8 @@ Arquitetura decoupled:
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from utils.logger import get_logger
+
+from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -107,7 +108,7 @@ class SchedulerService:
         """
         # Importação local intencional: evita que o banco seja conectado
         # antes da configuração do agendador estar completa
-        from services.pipeline_service import PipelineService
+        from app.services.pipeline_service import PipelineService
 
         logger.info("Agendador disparou a execução do pipeline de ingestão")
         metricas = PipelineService.executar()
@@ -116,7 +117,7 @@ class SchedulerService:
             logger.error("Pipeline encerrou com falha — verifique os logs")
 
         if executar_transformacao and metricas.get("bronze_ok"):
-            from transform import main as executar_transformacoes
+            from app.transform import main as executar_transformacoes
 
             codigo_saida = executar_transformacoes()
             if codigo_saida:

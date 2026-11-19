@@ -11,11 +11,6 @@ Estratégia:
     Em vez disso, testamos a lógica de montagem da URL diretamente,
     simulando o que o settings.py faz ao ser carregado.
 """
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
-
-import pytest
 
 
 def _montar_url(env: dict) -> str:

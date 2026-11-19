@@ -2,8 +2,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
-from config.settings import DATABASE_URL, DB_HOST, LOCAL_DATABASE_CONFIG
-
+from app.config.settings import DATABASE_URL, DB_HOST, LOCAL_DATABASE_CONFIG
 
 if isinstance(DATABASE_URL, str):
     if DATABASE_URL.startswith("postgres://"):

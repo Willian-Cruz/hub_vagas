@@ -1,12 +1,9 @@
-import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
-
-import pytest
-import pandas as pd
 from unittest.mock import patch
-from services.export_service import ExportService
 
+import pandas as pd
+
+from app.services.export_service import ExportService
 
 # ── DataFrame que simula a resposta do banco ─────────────────────────────────
 

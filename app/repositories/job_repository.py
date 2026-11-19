@@ -1,13 +1,12 @@
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy.exc import IntegrityError
+from app.database.connection import SessionLocal
+from app.utils.logger import get_logger
 from sqlalchemy import text
-
-from database.connection import SessionLocal
-from utils.logger import get_logger
+from sqlalchemy.exc import IntegrityError
 
 logger = get_logger(__name__)
 
@@ -84,7 +83,7 @@ class JobRepository:
         run_id = run_id or uuid4()
         origem = vaga.origem
         source_job_id = vaga.id_externo
-        collected_at = datetime.now(timezone.utc)
+        collected_at = datetime.now(UTC)
 
         raw_payload = _raw_payload_de_vaga(vaga)
         payload_hash = _payload_hash(raw_payload)
@@ -154,7 +153,7 @@ class JobRepository:
                     "payload_hash": payload_hash,
                     "raw_payload": json.dumps(raw_payload, ensure_ascii=False, default=str),
                     "is_relevant": vaga.is_relevant,
-                    "ingested_at": datetime.now(timezone.utc),
+                    "ingested_at": datetime.now(UTC),
                     "scraper_version": vaga.scraper_version,
                 },
             )

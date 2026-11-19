@@ -3,13 +3,7 @@ Testes unitários para NormalizeService (localização, modalidade, empresa).
 
 Execução: pytest tests/test_normalize.py -v
 """
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
-
-import pytest
-from services.normalize_service import NormalizeService
-
+from app.services.normalize_service import NormalizeService
 
 # ════════════════════════════════════════════════════════════════
 # TESTES DE LOCALIZAÇÃO

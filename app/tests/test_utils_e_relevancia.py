@@ -3,17 +3,13 @@ Testes dos utilitários de texto/data e do filtro de relevância.
 
 Execução: pytest tests/test_utils_e_relevancia.py -v
 """
-import os
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from datetime import date, datetime
 
 import pytest
 
-from services.relevance_service import RelevanceService
-from utils.date_utils import parse_data_infojobs, parse_data_vagas
-from utils.text_utils import chave_conteudo, valor_ou_none
+from app.services.relevance_service import RelevanceService
+from app.utils.date_utils import parse_data_infojobs, parse_data_vagas
+from app.utils.text_utils import chave_conteudo, valor_ou_none
 
 REFERENCIA = date(2026, 11, 3)
 

@@ -1,8 +1,10 @@
 import os
+
 import pandas as pd
 from sqlalchemy import text
-from database.connection import engine
-from utils.logger import get_logger
+
+from app.database.connection import engine
+from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -10,8 +10,8 @@ com o dbt).
 """
 import re
 
-from utils.seeds import carregar_seed
-from utils.text_utils import sem_acentos
+from app.utils.seeds import carregar_seed
+from app.utils.text_utils import sem_acentos
 
 
 class RelevanceService:

@@ -6,7 +6,7 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
-from constants.selectors import (
+from app.constants.selectors import (
     INFOJOBS_COMPANY,
     INFOJOBS_DATE,
     INFOJOBS_DESCRIPTION,
@@ -17,10 +17,10 @@ from constants.selectors import (
     INFOJOBS_METADATA_ICONS,
     INFOJOBS_TITLE,
 )
-from schemas.job_schema import JobSchema
-from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
-from utils.date_utils import parse_data_infojobs
-from utils.text_utils import normalizar_espacos, valor_ou_none
+from app.schemas.job_schema import JobSchema
+from app.scrapers.base_scraper import BaseScraper
+from app.utils.date_utils import parse_data_infojobs
+from app.utils.text_utils import normalizar_espacos, valor_ou_none
 
 
 class InfoJobsScraper(BaseScraper):

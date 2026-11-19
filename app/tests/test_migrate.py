@@ -3,11 +3,8 @@
 Verifica a lógica de ordenação, checksum e detecção de pendentes usando mocks.
 """
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
-
-sys_path_modificado = False
 
 
 def _import_migrate():

@@ -7,25 +7,13 @@ A transformação (raw → Bronze → Silver → Gold) é executada separadament
 Uso:
     python app/main.py
 """
-import os
-import sys
-
-# Permite executar `python app/main.py` a partir da raiz do repositório.
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-if APP_DIR not in sys.path:
-    sys.path.insert(0, APP_DIR)
-
-from database.connection import (
+from app.database.connection import (
     engine,
     ensure_bronze_schema,
     ensure_local_database_exists,
 )
-from database.models import base
-from database.job_model import Job  # registra o modelo no metadata
-from database.tech_model import Technology  # registra o modelo no metadata
-from database.job_tech_model import job_technologies  # registra a associação
-from database.bronze_model import ScrapeRun  # registra Bronze (scrape_runs)
-from services.pipeline_service import PipelineService
+from app.database.models import base
+from app.services.pipeline_service import PipelineService
 
 
 def main() -> int:

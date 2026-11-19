@@ -12,20 +12,18 @@ Valida:
 Execução (CI com services: postgres):
     pytest app/tests/integration/test_persistence.py -m integration -v
 """
-from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
 
-from repositories.job_repository import (
-    JobRepository,
+from app.repositories.job_repository import (
     DUPLICADA,
-    ERRO,
     REVISADA,
     SALVA,
+    JobRepository,
 )
-from schemas.job_schema import JobSchema
+from app.schemas.job_schema import JobSchema
 
 
 def _vaga(

@@ -1,13 +1,9 @@
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
- 
-import pytest
-import pandas as pd
 from unittest.mock import patch
-from services.analytics_service import AnalyticsService
- 
- 
+
+import pandas as pd
+
+from app.services.analytics_service import AnalyticsService
+
 # ── DataFrames que simulam respostas do banco ────────────────────────────────
  
 SENIORIDADE_DF = pd.DataFrame({

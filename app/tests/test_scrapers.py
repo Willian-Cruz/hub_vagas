@@ -11,22 +11,15 @@ Estratégia:
 
 Execução: pytest tests/test_scrapers.py -v
 """
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
+from unittest.mock import MagicMock, Mock
 
-import pytest
 import requests
-from types import SimpleNamespace
-from unittest.mock import MagicMock, Mock, patch
-from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from scrapers.base_scraper import ScrapeStatus
-from scrapers.vagas_scraper import VagasScraper
-from scrapers.infojobs_scraper import InfoJobsScraper
-from scrapers.gupy_scraper import GupyScraper
-from schemas.job_schema import JobSchema
-
+from app.schemas.job_schema import JobSchema
+from app.scrapers.base_scraper import ScrapeStatus
+from app.scrapers.gupy_scraper import GupyScraper
+from app.scrapers.infojobs_scraper import InfoJobsScraper
+from app.scrapers.vagas_scraper import VagasScraper
 
 # ════════════════════════════════════════════════════════════════
 # HTML FIXTURES — simulam o que os portais retornam
@@ -378,7 +371,7 @@ class TestInfoJobsScraperColetar:
         monkeypatch.setattr(InfoJobsScraper, "MAX_PAGES", 3)
         monkeypatch.setattr(
             InfoJobsScraper, "_buscar_pagina",
-            lambda pagina: '<div class="no-results">Nenhuma vaga encontrada</div>'.encode("utf-8")
+            lambda pagina: b'<div class="no-results">Nenhuma vaga encontrada</div>'
         )
         monkeypatch.setattr(
             InfoJobsScraper, "_parsear_cards",
@@ -484,10 +477,10 @@ def test_gupy_retorna_scrape_result_e_fecha_browser(monkeypatch):
     context.__exit__.return_value = False
     playwright.chromium.launch.return_value = browser
     monkeypatch.setattr(GupyScraper, "TERMOS_BUSCA", ["engenheiro de dados"])
-    monkeypatch.setattr("scrapers.gupy_scraper.sync_playwright", lambda: context)
+    monkeypatch.setattr("app.scrapers.gupy_scraper.sync_playwright", lambda: context)
     monkeypatch.setattr(GupyScraper, "_carregar_pagina", Mock(return_value="html"))
     monkeypatch.setattr(GupyScraper, "_parsear", Mock(return_value=[vaga]))
-    monkeypatch.setattr("scrapers.gupy_scraper.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("app.scrapers.gupy_scraper.time.sleep", lambda _seconds: None)
 
     resultado = GupyScraper.coletar()
 

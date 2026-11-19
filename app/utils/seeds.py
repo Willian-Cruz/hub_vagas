@@ -6,11 +6,11 @@ módulo). Assim não há duas listas divergentes em camadas diferentes.
 """
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 
-@lru_cache(maxsize=None)
+@cache
 def _projeto_raiz() -> Path:
     """Encontra a raiz do repositório (onde está dbt/seeds/)."""
     aqui = Path(__file__).resolve()
@@ -21,7 +21,7 @@ def _projeto_raiz() -> Path:
     return aqui.parent.parent.parent
 
 
-@lru_cache(maxsize=None)
+@cache
 def carregar_seed(nome_arquivo: str) -> list[str]:
     """Lê uma seed CSV de dbt/seeds/ e devolve a primeira coluna como lista."""
     caminho = _projeto_raiz() / "dbt" / "seeds" / nome_arquivo

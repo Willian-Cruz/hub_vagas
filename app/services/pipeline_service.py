@@ -24,19 +24,21 @@ Arquitetura medallion decoupled:
 A transformação é responsabilidade separada, executada via `python app/transform.py`.
 """
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 
-from utils.logger import get_logger, log_event
-from services.collector_service import CollectorService
-from repositories.bronze_repository import BronzeRepository
-from repositories.job_repository import DUPLICADA, ERRO, JobRepository, REVISADA, SALVA
-from scrapers.base_scraper import ScrapeStatus
-from database.connection import engine
-from notifier import enviar_falha
+from app.database.connection import engine
+from app.notifier import (
+    alertar_persistencia_raw_erros,
+    enviar_falha,
+)
+from app.repositories.bronze_repository import BronzeRepository
+from app.repositories.job_repository import DUPLICADA, REVISADA, SALVA, JobRepository
+from app.scrapers.base_scraper import ScrapeStatus
+from app.services.collector_service import CollectorService
+from app.utils.logger import get_logger, log_event
 
 logger = get_logger(__name__)
 
@@ -83,7 +85,7 @@ class PipelineService:
                 stage="advisory_lock",
                 event="lock_falha",
                 status="falha",
-                mensagem="Nao foi possível consultar o advisory lock; abortando execucao (fail-closed)",
+                mensagem="Nao foi possivel consultar o advisory lock; abortando execucao (fail-closed)",
             )
             return None, False
 
@@ -106,7 +108,7 @@ class PipelineService:
                 stage="advisory_lock",
                 event="lock_liberacao_falha",
                 status="falha",
-                mensagem="Não foi possível liberar o advisory lock",
+                mensagem="Nao foi possivel liberar o advisory lock",
             )
         finally:
             try:
@@ -117,7 +119,7 @@ class PipelineService:
     @staticmethod
     def executar() -> dict:
         """
-        Executa o pipeline de ingestão: coleta e persistência na raw layer `jobs`.
+        Executa o pipeline de ingestao: coleta e persistência na raw layer `jobs`.
 
         Semântica de estados (SUCCESS / PARTIAL / FAILED):
 
@@ -161,8 +163,6 @@ class PipelineService:
                 "records_updated":   int,   # vagas revistas na raw
                 "records_duplicated":int,   # vagas duplicadas ignoradas
                 "records_rejected":  int,   # vagas rejeitadas (erro de persistência)
-                "raw_errors":        int,   # sinônimo de records_rejected
-                "dbt_status":        str,   # "nao_executado" (dbt é etapa separada)
                 "error_stage":       str,   # etapa onde ocorreu erro, se houver
                 "sucesso":           bool,  # True se status == SUCCESS
                 ...
@@ -177,12 +177,12 @@ class PipelineService:
                 stage="advisory_lock",
                 event="pipeline_bloqueado",
                 status="bloqueado",
-                mensagem="Outra instância do pipeline já está em execução (advisory lock). Abortando.",
+                mensagem="Outra instancia do pipeline ja esta em execucao (advisory lock). Abortando.",
             )
-            agora_utc = datetime.now(timezone.utc).isoformat()
+            agora_utc = datetime.now(UTC).isoformat()
             return {
                 "run_id": None,
-                "status": "FALHADO",
+                "status": "FAILED",
                 "started_at": agora_utc,
                 "finished_at": agora_utc,
                 "duration_seconds": 0.0,
@@ -195,33 +195,18 @@ class PipelineService:
                 "records_updated": 0,
                 "records_duplicated": 0,
                 "records_rejected": 0,
-                "raw_errors": 0,
-                "raw_novas": 0,
-                "raw_revisadas": 0,
-                "raw_duplicadas": 0,
-                "raw_erros": 0,
-                "coletadas": 0,
-                "descartadas": 0,
-                "dbt_status": "nao_executado",
                 "error_stage": "advisory_lock",
-                "bronze_ok": False,
-                "fontes": [],
-                "fontes_sucesso": 0,
-                "fontes_parcial": 0,
-                "fontes_falha": 0,
-                "fontes_vazio": 0,
-                "duracao_seg": 0.0,
                 "sucesso": False,
                 "bloqueado_por_trava": True,
             }
 
         logger.info("=" * 60)
-        logger.info("PIPELINE DE INGESTÃO INICIADO")
+        logger.info("PIPELINE DE INGESTAO INICIADO")
         logger.info("=" * 60)
 
         metricas = {
             "run_id": None,
-            "status": "FALHADO",
+            "status": "FAILED",
             "started_at": None,
             "finished_at": None,
             "duration_seconds": 0.0,
@@ -234,12 +219,6 @@ class PipelineService:
             "records_updated": 0,
             "records_duplicated": 0,
             "records_rejected": 0,
-            "raw_errors": 0,
-            "raw_novas": 0,
-            "raw_revisadas": 0,
-            "raw_duplicadas": 0,
-            "raw_erros": 0,
-            "dbt_status": "nao_executado",
             "error_stage": None,
             "bronze_ok": False,
             "fontes": [],
@@ -255,7 +234,7 @@ class PipelineService:
         }
 
         inicio = time.time()
-        inicio_utc = datetime.now(timezone.utc)
+        inicio_utc = datetime.now(UTC)
         run_id = uuid4()
         metricas["run_id"] = str(run_id)
         metricas["started_at"] = inicio_utc.isoformat()
@@ -269,7 +248,7 @@ class PipelineService:
             stage="inicio",
             event="pipeline_started",
             status="iniciado",
-            mensagem="PIPELINE DE INGESTÃO INICIADO",
+            mensagem="PIPELINE DE INGESTAO INICIADO",
         )
 
         try:
@@ -329,7 +308,7 @@ class PipelineService:
                     event="source_completed",
                     status=resultado.status.value,
                     records_received=len(resultado.jobs),
-                    mensagem=f"Fonte {resultado.source}: {resultado.status.value} | Vagas: {len(resultado.jobs)} | Páginas: {resultado.pages_processed}",
+                    mensagem=f"Fonte {resultado.source}: {resultado.status.value} | Vagas: {len(resultado.jobs)} | Paginas: {resultado.pages_processed}",
                 )
                 if resultado.error:
                     log_event(
@@ -377,17 +356,12 @@ class PipelineService:
                         vaga, run_id=run_id
                     )
                     if resultado_salvamento == SALVA:
-                        metricas["raw_novas"] += 1
                         metricas["records_inserted"] += 1
                     elif resultado_salvamento == REVISADA:
-                        metricas["raw_revisadas"] += 1
                         metricas["records_updated"] += 1
                     elif resultado_salvamento == DUPLICADA:
-                        metricas["raw_duplicadas"] += 1
                         metricas["records_duplicated"] += 1
                     else:
-                        metricas["raw_erros"] += 1
-                        metricas["raw_errors"] += 1
                         metricas["records_rejected"] += 1
                 log_event(
                     logger=logger,
@@ -397,11 +371,17 @@ class PipelineService:
                     stage="persistencia",
                     event="persistence_completed",
                     status="sucesso",
-                    records_received=metricas["raw_novas"],
-                    records_persisted=metricas["raw_novas"],
-                    records_duplicated=metricas["raw_duplicadas"],
-                    records_rejected=metricas["raw_erros"],
-                    mensagem=f"Raw concluída — {metricas['raw_novas']} novas, {metricas['raw_revisadas']} revistas, {metricas['raw_duplicadas']} duplicadas, {metricas['raw_erros']} erros",
+                    records_received=metricas["records_inserted"],
+                    records_persisted=metricas["records_inserted"],
+                    records_duplicated=metricas["records_duplicated"],
+                    records_rejected=metricas["records_rejected"],
+                    mensagem=(
+                        f"Raw concluida — "
+                        f"{metricas['records_inserted']} novas, "
+                        f"{metricas['records_updated']} revistas, "
+                        f"{metricas['records_duplicated']} duplicadas, "
+                        f"{metricas['records_rejected']} erros"
+                    ),
                 )
             except Exception:
                 error_stage = "persistencia"
@@ -425,7 +405,7 @@ class PipelineService:
                 stage="bronze",
                 event="persistence_started",
                 status="iniciado",
-                mensagem="Etapa 3/3: Gravando status de execução no Bronze...",
+                mensagem="Etapa 3/3: Gravando status de execucao no Bronze...",
             )
             bronze_ok = False
             try:
@@ -433,7 +413,7 @@ class PipelineService:
                     resultados,
                     run_id=run_id,
                     started_at=inicio_utc,
-                    finished_at=datetime.now(timezone.utc),
+                    finished_at=datetime.now(UTC),
                 )
                 bronze_ok = True
                 metricas["bronze_ok"] = True
@@ -446,7 +426,7 @@ class PipelineService:
                     event="persistence_completed",
                     status="sucesso",
                     records_persisted=metricas_bronze,
-                    mensagem=f"Bronze concluída — {metricas_bronze} scrape_run(s) registrado(s)",
+                    mensagem=f"Bronze concluida — {metricas_bronze} scrape_run(s) registrado(s)",
                 )
             except Exception:
                 error_stage = "bronze"
@@ -470,31 +450,34 @@ class PipelineService:
             fontes_com_vagas = fontes_sucesso + [f for f in fontes_parcial if f.jobs]
             tem_dados = len(fontes_com_vagas) > 0
             todas_sucesso = len(fontes_sucesso) == len(resultados) and len(resultados) > 0
-            tem_erros_persistencia = metricas["raw_erros"] > 0
-            persistiu_alguma = metricas["raw_novas"] > 0 or metricas["raw_revisadas"] > 0
+            tem_erros_persistencia = metricas["records_rejected"] > 0
+            persistiu_alguma = metricas["records_inserted"] > 0 or metricas["records_updated"] > 0
 
             if tem_erros_persistencia and not persistiu_alguma:
                 # Erro de persistência em todas as vagas: falha total
                 metricas["sucesso"] = False
-                metricas["status"] = "FALHADO"
+                metricas["status"] = "FAILED"
             elif tem_erros_persistencia and persistiu_alguma:
                 # Algumas vagas persistidas, outras falharam: parcial
                 metricas["sucesso"] = False
                 metricas["status"] = "PARTIAL"
             elif bronze_ok and tem_dados:
                 metricas["sucesso"] = True
-                metricas["status"] = "SUCESSO" if todas_sucesso else "PARTIAL"
+                metricas["status"] = "SUCCESS" if todas_sucesso else "PARTIAL"
             elif bronze_ok and not tem_dados:
                 # Bronze funcionou, mas nenhuma fonte trouxe dados
                 metricas["sucesso"] = False
-                metricas["status"] = "FALHADO"
+                metricas["status"] = "FAILED"
             else:
-                # Bronze nao funcionou (erro de persistência)
+                # Bronze não funcionou (erro de persistência)
                 metricas["sucesso"] = False
-                metricas["status"] = "FALHADO"
+                metricas["status"] = "FAILED"
 
             if error_stage:
                 metricas["error_stage"] = error_stage
+
+            # Alertas baseados no resultado da execução
+            alertar_persistencia_raw_erros(metricas)
 
             if metricas["fontes_falha"] > 0:
                 log_event(
@@ -506,7 +489,7 @@ class PipelineService:
                     event="fontes_falha",
                     status="aviso",
                     records_rejected=metricas["fontes_falha"],
-                    mensagem=f"Pipeline concluído com {metricas['fontes_falha']} fonte(s) em falha",
+                    mensagem=f"Pipeline concluido com {metricas['fontes_falha']} fonte(s) em falha",
                 )
             if metricas["fontes_parcial"] > 0:
                 log_event(
@@ -517,10 +500,10 @@ class PipelineService:
                     stage="finalizacao",
                     event="fontes_parcial",
                     status="aviso",
-                    mensagem=f"Pipeline concluído com {metricas['fontes_parcial']} fonte(s) parcial(is)",
+                    mensagem=f"Pipeline concluido com {metricas['fontes_parcial']} fonte(s) parcial(is)",
                 )
             if not metricas["sucesso"]:
-                if metricas["status"] == "FALHADO":
+                if metricas["status"] == "FAILED":
                     log_event(
                         logger=logger,
                         level="WARNING",
@@ -529,7 +512,7 @@ class PipelineService:
                         stage="finalizacao",
                         event="pipeline_sem_sucesso",
                         status="falha",
-                        mensagem="Pipeline não coletou vagas de nenhuma fonte",
+                        mensagem="Pipeline nao coletou vagas de nenhuma fonte",
                     )
                     enviar_falha(metricas, erro="nenhuma fonte trouxe vagas")
                 else:
@@ -542,7 +525,7 @@ class PipelineService:
                         stage="finalizacao",
                         event="pipeline_parcial",
                         status="parcial",
-                        mensagem="Pipeline concluído parcialmente — algumas fontes falharam ou não trouxeram vagas",
+                        mensagem="Pipeline concluido parcialmente — algumas fontes falharam ou não trouxeram vagas",
                     )
 
         except Exception as e:
@@ -558,16 +541,16 @@ class PipelineService:
                 status="falha",
                 error_type=type(e).__name__,
                 error_message=str(e),
-                mensagem=f"Erro crítico no pipeline: {e}",
+                mensagem=f"Erro critico no pipeline: {e}",
             )
             metricas["sucesso"] = False
-            metricas["status"] = "FALHADO"
+            metricas["status"] = "FAILED"
             enviar_falha(metricas, erro=str(e))
 
         finally:
             PipelineService._liberar_travar_execucao(trave_conexao)
             fim = time.time()
-            fim_utc = datetime.now(timezone.utc).isoformat()
+            fim_utc = datetime.now(UTC).isoformat()
             metricas["finished_at"] = fim_utc
             metricas["duracao_seg"] = round(fim - inicio, 2)
             metricas["duration_seconds"] = metricas["duracao_seg"]
@@ -582,16 +565,16 @@ class PipelineService:
                 status=status_final.lower(),
                 duration_ms=round(metricas["duracao_seg"] * 1000, 2),
                 records_received=metricas["coletadas"],
-                records_persisted=metricas["raw_novas"],
-                records_duplicated=metricas["raw_duplicadas"],
-                records_rejected=metricas["raw_erros"],
+                records_persisted=metricas["records_inserted"],
+                records_duplicated=metricas["records_duplicated"],
+                records_rejected=metricas["records_rejected"],
                 mensagem=(
                     f"PIPELINE {status_final} em {metricas['duracao_seg']}s | "
                     f"Coletadas: {metricas['coletadas']} | "
                     f"Descartadas: {metricas['descartadas']} | "
-                    f"Raw: {metricas['raw_novas']} novas / "
-                    f"{metricas['raw_revisadas']} revistas / "
-                    f"{metricas['raw_duplicadas']} dup / {metricas['raw_erros']} err | "
+                    f"Raw: {metricas['records_inserted']} novas / "
+                    f"{metricas['records_updated']} revistas / "
+                    f"{metricas['records_duplicated']} dup / {metricas['records_rejected']} err | "
                     f"Fontes: {metricas['fontes_sucesso']} ok, {metricas['fontes_parcial']} parcial, {metricas['fontes_falha']} falha, {metricas['fontes_vazio']} vazio"
                 ),
             )

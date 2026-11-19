@@ -1,13 +1,13 @@
+import random
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-import random
-import time
 
 from bs4 import BeautifulSoup
 
-from schemas.job_schema import JobSchema
-from services.relevance_service import RelevanceService
+from app.schemas.job_schema import JobSchema
+from app.services.relevance_service import RelevanceService
 
 
 class ScrapeStatus(str, Enum):
@@ -135,7 +135,7 @@ class BaseScraper(ABC):
                     break
                 if cards_encontrados == 0:
                     erro_coleta = (
-                        f"A página não contém o seletor esperado."
+                        "A página não contém o seletor esperado."
                     )
                 elif invalidos:
                     erro_coleta = (
@@ -329,7 +329,7 @@ class BaseScraper(ABC):
                 if resultado.status != ScrapeStatus.FAILED or not resultado.error:
                     return resultado
                 ultimo_resultado = resultado
-            except (TypeError,) as exc:
+            except TypeError as exc:
                 ultimo_resultado = ScrapeResult(
                     source=cls.SOURCE,
                     status=ScrapeStatus.FAILED,

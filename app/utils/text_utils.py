@@ -1,7 +1,6 @@
 """Limpeza de texto compartilhada por scrapers, normalizadores e repositório."""
 import re
 import unicodedata
-from typing import Optional
 
 # Textos que os portais usam no lugar de "sem informação". Comparados em
 # minúsculas (casefold). Viram None em vez de entrar no banco como dado.
@@ -34,7 +33,7 @@ def sem_acentos(texto: str) -> str:
     )
 
 
-def valor_ou_none(texto) -> Optional[str]:
+def valor_ou_none(texto) -> str | None:
     """Texto limpo, ou None quando vazio ou placeholder do portal."""
     limpo = normalizar_espacos(texto)
     if not limpo or limpo.casefold() in PLACEHOLDERS:
@@ -42,7 +41,7 @@ def valor_ou_none(texto) -> Optional[str]:
     return limpo
 
 
-def chave_conteudo(origem, titulo, empresa, localizacao) -> Optional[str]:
+def chave_conteudo(origem, titulo, empresa, localizacao) -> str | None:
     """Chave para detectar a mesma vaga republicada com outro ID no portal.
 
     Devolve None se faltar empresa ou local: sem eles, vagas diferentes com o

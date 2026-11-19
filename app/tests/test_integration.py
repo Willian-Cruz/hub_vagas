@@ -8,14 +8,12 @@ Execucao local:
 """
 from __future__ import annotations
 
-import os
 import pytest
-
 from sqlalchemy import text
 
-from database.connection import engine
-from repositories.job_repository import JobRepository, SALVA, DUPLICADA
-from schemas.job_schema import JobSchema
+from app.database.connection import engine
+from app.repositories.job_repository import DUPLICADA, SALVA, JobRepository
+from app.schemas.job_schema import JobSchema
 
 
 @pytest.fixture(scope="module")

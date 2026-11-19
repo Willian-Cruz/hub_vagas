@@ -1,7 +1,6 @@
 import re
-from typing import Optional
 
-from utils.text_utils import valor_ou_none
+from app.utils.text_utils import valor_ou_none
 
 
 class NormalizeService:
@@ -33,7 +32,7 @@ class NormalizeService:
         return " ".join(palavras)
 
     @classmethod
-    def normalizar_localizacao(cls, valor) -> Optional[str]:
+    def normalizar_localizacao(cls, valor) -> str | None:
         #____________________________________________________________________________________
 
         # LOCALIZAÇÃO
@@ -92,7 +91,7 @@ class NormalizeService:
         return cidade or None
 
     @staticmethod
-    def normalizar_modalidade(valor) -> Optional[str]:
+    def normalizar_modalidade(valor) -> str | None:
         """Presencial / Híbrido / Remoto, ou None se não reconhecer."""
         texto = valor_ou_none(valor)
         if texto is None:
@@ -111,6 +110,6 @@ class NormalizeService:
     #____________________________________________________________________________________
 
     @staticmethod
-    def normalizar_empresa(nome) -> Optional[str]:
+    def normalizar_empresa(nome) -> str | None:
         """Remove espaços extras. 'Confidencial' e vazio viram None."""
         return valor_ou_none(nome)

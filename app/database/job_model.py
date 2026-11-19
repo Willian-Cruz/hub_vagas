@@ -1,8 +1,10 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, UniqueConstraint
-from sqlalchemy.sql import func
+from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
-from database.models import base
-from database.job_tech_model import job_technologies
+from sqlalchemy.sql import func
+
+from app.database.job_tech_model import job_technologies
+from app.database.models import base
+
 
 class Job(base):
 

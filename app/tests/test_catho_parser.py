@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 from bs4 import BeautifulSoup
 
-from scrapers import catho_parser
-from scrapers.parser_utils import empresa_ou_none, limpar, parse_salario, salario_sem_beneficios
+from app.scrapers import catho_parser
+from app.scrapers.parser_utils import empresa_ou_none, limpar, parse_salario, salario_sem_beneficios
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HOJE = date(2026, 11, 11)  # dia da captura (window.offersgriddata.toddat, na Catho)

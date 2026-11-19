@@ -10,7 +10,9 @@ Uso:
 """
 import time
 from pathlib import Path
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
+from playwright.sync_api import sync_playwright
 
 URL        = "https://www.vagas.com.br/vagas-de-engenheiro-de-dados"
 SCREENSHOT = Path(__file__).parent.parent / "debug_screenshot.png"

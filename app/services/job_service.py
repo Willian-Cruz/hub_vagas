@@ -1,5 +1,6 @@
-from database.connection import SessionLocal
-from database.job_model import Job
+from app.database.connection import SessionLocal
+from app.database.job_model import Job
+
 
 class JobService:
 

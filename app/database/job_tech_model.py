@@ -1,5 +1,6 @@
-from sqlalchemy import Table, Column, Integer, ForeignKey
-from database.models import base
+from sqlalchemy import Column, ForeignKey, Integer, Table
+
+from app.database.models import base
 
 job_technologies = Table(
     "job_technologies",

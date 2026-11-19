@@ -1,13 +1,13 @@
-from time import perf_counter
 import os
+from time import perf_counter
 
-from scrapers.base_scraper import ScrapeResult, ScrapeStatus
-from scrapers.catho_scraper import CathoScraper
-from scrapers.gupy_scraper import GupyScraper
-from scrapers.infojobs_scraper import InfoJobsScraper
-from scrapers.vagas_scraper import VagasScraper
-from services.relevance_service import RelevanceService
-from utils.logger import get_logger
+from app.scrapers.base_scraper import ScrapeResult, ScrapeStatus
+from app.scrapers.catho_scraper import CathoScraper
+from app.scrapers.gupy_scraper import GupyScraper
+from app.scrapers.infojobs_scraper import InfoJobsScraper
+from app.scrapers.vagas_scraper import VagasScraper
+from app.services.relevance_service import RelevanceService
+from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

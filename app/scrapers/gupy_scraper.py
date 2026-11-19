@@ -1,10 +1,13 @@
 import re
 import time
 from urllib.parse import quote, urlparse
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+
 from bs4 import BeautifulSoup
-from schemas.job_schema import JobSchema
-from scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
+from playwright.sync_api import sync_playwright
+
+from app.schemas.job_schema import JobSchema
+from app.scrapers.base_scraper import BaseScraper, ScrapeResult, ScrapeStatus
 
 
 class GupyScraper(BaseScraper):

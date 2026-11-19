@@ -8,21 +8,17 @@ Estratégia: SessionLocal mockado, sem banco real.
 
 Execução: pytest tests/test_job_repository_dedup.py -v
 """
-import os
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from unittest.mock import MagicMock, patch
 
-from repositories.job_repository import (
-    JobRepository,
+from app.repositories.job_repository import (
     DUPLICADA,
     REVISADA,
     SALVA,
+    JobRepository,
     _payload_hash,
     _raw_payload_de_vaga,
 )
-from schemas.job_schema import JobSchema
+from app.schemas.job_schema import JobSchema
 
 
 def _vaga(**campos):
@@ -59,7 +55,7 @@ class TestDedupPorHash:
         vaga = _vaga()
         session_class, session = _mock_session(fetchone_return=(_hash_da(vaga),))
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             assert JobRepository.salvar(vaga) == DUPLICADA
 
         assert session.execute.call_count == 1  # apenas o SELECT de dedup
@@ -69,7 +65,7 @@ class TestDedupPorHash:
         vaga = _vaga()
         session_class, session = _mock_session(fetchone_return=("hash-antigo",))
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             assert JobRepository.salvar(vaga) == REVISADA
 
         session.commit.assert_called_once()
@@ -77,7 +73,7 @@ class TestDedupPorHash:
     def test_sem_observacao_anterior_e_salva(self):
         session_class, session = _mock_session(fetchone_return=None)
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             assert JobRepository.salvar(_vaga()) == SALVA
 
         session.commit.assert_called_once()
@@ -88,7 +84,7 @@ class TestExecucao:
     def test_chama_insert_e_commit_ao_salvar(self):
         session_class, session = _mock_session(fetchone_return=None)
 
-        with patch("repositories.job_repository.SessionLocal", session_class):
+        with patch("app.repositories.job_repository.SessionLocal", session_class):
             JobRepository.salvar(_vaga())
 
         assert session.execute.call_count == 2  # SELECT + INSERT

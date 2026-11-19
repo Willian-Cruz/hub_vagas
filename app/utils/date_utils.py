@@ -1,14 +1,13 @@
 """Conversão das datas de publicação que os portais exibem nos cards."""
 import re
 from datetime import date, datetime, time, timedelta
-from typing import Optional
 
 _DATA_BR = re.compile(r"\b(\d{2})/(\d{2})/(\d{4})\b")
 _HA_DIAS = re.compile(r"\bh[aá]\s+(\d+)\s+dias?\b", re.IGNORECASE)
 _HA_HORAS = re.compile(r"\bh[aá]\s+(\d+)\s+(?:horas?|minutos?)\b", re.IGNORECASE)
 
 
-def parse_data_vagas(texto, referencia: Optional[date] = None) -> Optional[datetime]:
+def parse_data_vagas(texto, referencia: date | None = None) -> datetime | None:
     """Converte a data do card do Vagas.com em datetime (precisão de dia).
 
     Formatos vistos no portal: "Há 4 dias" e "21/10/2026". Também trata
@@ -44,7 +43,7 @@ def parse_data_vagas(texto, referencia: Optional[date] = None) -> Optional[datet
     return None
 
 
-def parse_data_infojobs(valor) -> Optional[datetime]:
+def parse_data_infojobs(valor) -> datetime | None:
     """Converte o atributo `data-value` do InfoJobs ("2026/10/30 10:59:00")."""
     if not valor:
         return None

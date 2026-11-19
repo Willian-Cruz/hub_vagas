@@ -9,14 +9,11 @@ Estratégia de mock:
 
 Execução: pytest tests/test_scheduler_service.py -v
 """
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock, call
-from services.scheduler_service import SchedulerService
 
+from app.services.scheduler_service import SchedulerService
 
 # ── Helper: cria um scheduler falso e captura as chamadas ────────────────────
 
@@ -28,7 +25,7 @@ def _mock_scheduler():
     return scheduler
 
 
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════
 # TESTES — iniciar_diario
 # ═══════════════════════════════════════════════════════════════
 
@@ -36,7 +33,7 @@ class TestIniciarDiario:
 
     def test_usa_hora_padrao_quando_nao_informada(self):
         mock_sched = _mock_scheduler()
-        with patch("services.scheduler_service.BlockingScheduler", return_value=mock_sched):
+        with patch("app.services.scheduler_service.BlockingScheduler", return_value=mock_sched):
             SchedulerService.iniciar_diario()
 
         args, kwargs = mock_sched.add_job.call_args
@@ -46,7 +43,7 @@ class TestIniciarDiario:
 
     def test_usa_hora_e_minuto_customizados(self):
         mock_sched = _mock_scheduler()
-        with patch("services.scheduler_service.BlockingScheduler", return_value=mock_sched):
+        with patch("app.services.scheduler_service.BlockingScheduler", return_value=mock_sched):
             SchedulerService.iniciar_diario(hora=8, minuto=30)
 
         # Verifica que add_job foi chamado uma vez
@@ -63,20 +60,20 @@ class TestIniciarDiario:
 
     def test_add_job_e_chamado(self):
         mock_sched = _mock_scheduler()
-        with patch("services.scheduler_service.BlockingScheduler", return_value=mock_sched):
+        with patch("app.services.scheduler_service.BlockingScheduler", return_value=mock_sched):
             SchedulerService.iniciar_diario()
         assert mock_sched.add_job.called
 
     def test_start_e_chamado(self):
         mock_sched = _mock_scheduler()
-        with patch("services.scheduler_service.BlockingScheduler", return_value=mock_sched):
+        with patch("app.services.scheduler_service.BlockingScheduler", return_value=mock_sched):
             SchedulerService.iniciar_diario()
         assert mock_sched.start.called
 
     def test_encerra_graciosamente_com_keyboard_interrupt(self):
         mock_sched = _mock_scheduler()
         mock_sched.start.side_effect = KeyboardInterrupt
-        with patch("services.scheduler_service.BlockingScheduler", return_value=mock_sched):
+        with patch("app.services.scheduler_service.BlockingScheduler", return_value=mock_sched):
             # Não deve levantar exceção — deve ser tratada internamente
             try:
                 SchedulerService.iniciar_diario()
@@ -86,14 +83,14 @@ class TestIniciarDiario:
     def test_encerra_graciosamente_com_system_exit(self):
         mock_sched = _mock_scheduler()
         mock_sched.start.side_effect = SystemExit
-        with patch("services.scheduler_service.BlockingScheduler", return_value=mock_sched):
+        with patch("app.services.scheduler_service.BlockingScheduler", return_value=mock_sched):
             try:
                 SchedulerService.iniciar_diario()
             except SystemExit:
                 pytest.fail("SystemExit não foi tratado pelo SchedulerService")
 
 
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════
 # TESTES — iniciar_por_intervalo
 # ═══════════════════════════════════════════════════════════════
 
@@ -101,20 +98,20 @@ class TestIniciarPorIntervalo:
 
     def test_add_job_e_chamado(self):
         mock_sched = _mock_scheduler()
-        with patch("services.scheduler_service.BlockingScheduler", return_value=mock_sched):
+        with patch("app.services.scheduler_service.BlockingScheduler", return_value=mock_sched):
             SchedulerService.iniciar_por_intervalo(horas=2)
         assert mock_sched.add_job.called
 
     def test_start_e_chamado(self):
         mock_sched = _mock_scheduler()
-        with patch("services.scheduler_service.BlockingScheduler", return_value=mock_sched):
+        with patch("app.services.scheduler_service.BlockingScheduler", return_value=mock_sched):
             SchedulerService.iniciar_por_intervalo(horas=2)
         assert mock_sched.start.called
 
     def test_encerra_graciosamente_com_keyboard_interrupt(self):
         mock_sched = _mock_scheduler()
         mock_sched.start.side_effect = KeyboardInterrupt
-        with patch("services.scheduler_service.BlockingScheduler", return_value=mock_sched):
+        with patch("app.services.scheduler_service.BlockingScheduler", return_value=mock_sched):
             try:
                 SchedulerService.iniciar_por_intervalo(horas=1)
             except KeyboardInterrupt:
@@ -122,7 +119,7 @@ class TestIniciarPorIntervalo:
 
     def test_intervalo_padrao_e_6_horas(self):
         mock_sched = _mock_scheduler()
-        with patch("services.scheduler_service.BlockingScheduler", return_value=mock_sched):
+        with patch("app.services.scheduler_service.BlockingScheduler", return_value=mock_sched):
             SchedulerService.iniciar_por_intervalo()
         # Verifica que o trigger de intervalo foi usado (add_job chamado)
         assert mock_sched.add_job.call_count == 1
@@ -130,7 +127,7 @@ class TestIniciarPorIntervalo:
 
 # ═══════════════════════════════════════════════════════════════
 # TESTES — _executar_pipeline (callback interno)
-# ═══════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════
 
 class TestExecutarPipeline:
 
@@ -140,7 +137,7 @@ class TestExecutarPipeline:
             "duracao_seg": 5.0, "sucesso": True,
         }
         with patch(
-            "services.pipeline_service.PipelineService.executar",
+            "app.services.pipeline_service.PipelineService.executar",
             return_value=metricas,
         ) as executar:
             SchedulerService._executar_pipeline()
@@ -148,7 +145,7 @@ class TestExecutarPipeline:
 
     def test_nao_levanta_excecao_quando_pipeline_falha(self):
         with patch(
-            "services.pipeline_service.PipelineService.executar",
+            "app.services.pipeline_service.PipelineService.executar",
             return_value={"sucesso": False},
         ) as executar:
             SchedulerService._executar_pipeline()

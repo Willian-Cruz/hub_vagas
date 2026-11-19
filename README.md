@@ -40,10 +40,10 @@ flowchart LR
 
 | Etapa | Onde fica | O que faz |
 | --- | --- | --- |
-| **Ingestão** | `app/main.py`, `app/services/pipeline_service.py`, `app/services/collector_service.py` | Roda cada scraper em sequência (falha de um não interrompe os outros), grava vagas brutas em `raw.job_observations` (dedup por `payload_hash`) e registra status em `bronze.scrape_runs`. O Python aplica contrato de NULL e filtro de relevância por título; normalização e dedup de negócio ficam no dbt. Métricas separam `raw_novas` / `raw_revisadas` / `raw_duplicadas` / `raw_erros`. |
+| **Ingestão** | `app/main.py`, `app/services/pipeline_service.py`, `app/services/collector_service.py` | Roda cada scraper em sequência (falha de um não interrompe os outros), grava vagas brutas em `raw.job_observations` (dedup por `payload_hash`) e registra status em `bronze.scrape_runs`. O Python aplica contrato de NULL e filtro de relevância por título; normalização e dedup de negócio ficam no dbt. Métricas separam `records_inserted` / `records_updated` / `records_duplicated` / `records_rejected`. |
 | **Relevância** | `app/services/relevance_service.py` | Marca `is_relevant` / `motivo_relevancia` em **todas** as vagas (Opção A: nada é descartado no scraper; a Silver filtra nos marts). |
 | **Raw** | `app/repositories/job_repository.py` | `raw.job_observations` (landing zone, append-only): `raw_payload` JSONB, `payload_hash`, `is_relevant`. `public.jobs` é legado (migração 004); não é mais gravada pelo Python. |
-| **Bronze** | `app/repositories/bronze_repository.py` | Snapshot imutável de execução por fonte em `bronze.scrape_runs` para freshness (fonte `bronze` no dbt com `filter: status in ('success','partial')`). |
+| **Bronze** | `app/repositories/bronze_repository.py` | Snapshot imutável de execução por fonte em `bronze.scrape_runs` para freshness (fonte `bronze` no dbt com `filter: status in ('SUCCESS','PARTIAL')`). |
 | **Silver** | `dbt/models/staging/`, `dbt/models/intermediate/`, `dbt/macros/` | Executado via `python app/transform.py`. Campo sem informação é `NULL`. Padroniza senioridade, localidade, salário, modalidade; mantém todas as linhas com `dedup_group_id` + `is_canonical` + `first_seen_at` / `last_seen_at` + `dias_no_ar` + `is_ativa`. |
 | **Gold** | `dbt/models/marts/` | Executado via `python app/transform.py`. 7 marts: `mart_vagas`, `mart_vagas_por_dia`, `mart_vagas_por_origem_localidade`, `mart_demanda_tecnologias`, `mart_status_fontes`, `mart_salarios`, `mart_qualidade_campos`. |
 | **Orquestração** | `app/main.py`, `app/scheduler.py`, `app/services/scheduler_service.py` | Apenas ingestão: coleta e gravação na raw. Transformação disparada separadamente via `transform.py`. |
@@ -88,7 +88,7 @@ Snapshot append-only de execução por fonte.
 | `finished_at` | timestamptz | NOT NULL |
 | `created_at` | timestamptz | NOT NULL, default `now()` |
 
-Freshness: `filter: status in ('success','partial')`; warn 24 h / error 72 h.
+Freshness: `filter: status in ('SUCCESS','PARTIAL')`; warn 24 h / error 72 h.
 
 ### Silver — `silver.jobs` (normalização + dedup)
 
@@ -263,7 +263,7 @@ git clone https://github.com/Willian-Cruz/hub_vagas.git
 cd hub_vagas
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+pip install -e .                # instalação editável (entry points: hub-vagas-ingest, hub-vagas-transform, hub-vagas-scheduler)
 playwright install chromium
 ```
 
@@ -318,20 +318,24 @@ python infra/migrate.py --verificar  # lista pendentes sem aplicar
 #### 4a. Ingestão: coleta → raw `raw.job_observations`
 
 ```bash
-# Execução única
-python app/main.py
+# Execução única (via entry point ou script direto)
+hub-vagas-ingest
+# ou: python app/main.py
 
 # Agendado: todo dia às 06:00, São Paulo
-python app/scheduler.py
+hub-vagas-scheduler
+# ou: python app/scheduler.py
 
 # Com transformação dbt após cada coleta
-python app/scheduler.py --com-transformacao
+hub-vagas-scheduler --com-transformacao
+# ou: python app/scheduler.py --com-transformacao
 ```
 
 #### 4b. Transformação: raw → Silver → Gold (via dbt)
 
 ```bash
-python app/transform.py          # dbt build (modelos + testes)
+hub-vagas-transform          # dbt build (modelos + testes)
+# ou: python app/transform.py
 python app/transform.py source freshness
 python app/run_dbt.py build
 ```
@@ -420,7 +424,7 @@ O GitHub Actions roda, a cada push/PR na `main`:
 5. Detecção de secrets com detect-secrets
 6. Scan de vulnerabilidades com pip-audit
 
-**Última validação:** dbt build **PASS=184, WARN=3, ERROR=0, SKIP=0**; pytest **342 passed** (testes de unidade + integração em PostgreSQL real + 4 testes de advisory lock); ruff warnings de estilo (cosméticos); pip-audit **sem vulnerabilidades**; detect-secrets **sem novos segredos** (baseline `.secrets.baseline`).
+**Última validação (Fase 3.3):** dbt build **PASS=184, WARN=3, ERROR=0, SKIP=0**; pytest **323 passed** (testes de unidade — integração requer PostgreSQL no CI); ruff **0 erros novos**; pip-audit **sem vulnerabilidades** em requirements.txt e requirements-dev.txt; detect-secrets **0 segredos** (baseline limpo); lockfiles `requirements.txt`/`requirements-dev.txt` **reproduzíveis** em Python 3.11; CI **7 jobs independentes** (deps, lint, test, integration, dbt-build, security, pip-audit); instalação editável (`pip install -e .`) com 3 entry points funcionais.
 
 ---
 
@@ -448,6 +452,7 @@ O GitHub Actions roda, a cada push/PR na `main`:
 | 20 (nov/2026) | **Fase 3 — Qualidade, Testes e Observabilidade**: contratos de dados documentados (`docs/data_dictionary/contracts.md`, `docs/data_dictionary/data_dictionary.md`); qualidade dbt reforçada (validação salario_min<=max, precisão/recall de tecnologias, severidade documentada); testes E2E e integração (ambiente PostgreSQL isolado, migrations automáticas, cenários A-G, CI com `services: postgres` e dbt build a cada push/PR); observabilidade (logs estruturados com `run_id`, `mart_saude_pipeline` consolidado, condições de alerta documentadas); dependências e segurança (requirements.in/requirements.txt separados, requirements-dev.in/requirements-dev.txt, Dependabot, pip-audit no CI, `.github/dependabot.yml`) |
 | 21 (nov/2026) | **Fase 3.1 — Estabilização, correção e validação integrada**: CI/CD consolidada (workflow único `tests.yml` com jobs: deps, lint, test, integration, dbt-build, security, pip-audit; `pip-compile` correto; baseline do detect-secrets); testes de integração e E2E em PostgreSQL real (7 cenários A–G); coluna física `link` em `raw.job_observations` (migração 010); validadores Pydantic (título/link/origem não vazios); advisory lock fail-closed; status de execução coerente (erros de persistência → FALHADO/PARTIAL); logs estruturados JSON com `log_event()`; migration 000 para banco limpo; contrato dbt atualizado com `link`; `pyproject.toml` `requires-python = ">=3.11"` |
 | 22 (nov/2026) | **Fase 3.2 — Estabilização do CI/CD, qualidade de dados e validação E2E**: migração 000 corrigida (bug `p.name[0:4].isdigit()` que falhava para `000_`); `dbt/sources.yml` criado (fontes `raw_observations` e `bronze`); macro `select_raw_jobs` corrigida para usar `source('raw_observations', 'job_observations')`; macro `monitored_technologies` sincronizada com a seed (30 tecnologias); Cenário A do E2E reescrito para fluxo completo Raw → Silver → Gold com 10 vagas (valida Silver `silver.jobs`, Gold `gold.mart_vagas` com tecnologias detectadas, e linhagem `run_id`/`ingested_at`/`scraper_version`); 4 testes de advisory lock (disponível, ocupado, liberação após falha, concorrência); `dbt build` em banco limpo com 184 PASS; `pip install -e .` funcional com `requires-python = ">=3.11"` |
+| 23 (nov/2026) | **Fase 3.3 — Estabilização definitiva CI/CD, qualidade, E2E e segurança**: Python padronizado em 3.11 (`requires-python = "==3.11.*"`); lockfiles `requirements.txt`/`requirements-dev.txt` regenerados e reproduzíveis (Python 3.11); 7 jobs CI independentes (deps, lint, test, integration, dbt-build, security, pip-audit); testes E2E 7 cenários A–G validados; executor `infra/migrate.py` testado (15 testes); status do pipeline padronizados `SUCCESS`/`PARTIAL`/`FAILED`; contadores unificados (`records_inserted`/`records_updated`/`records_duplicated`/`records_rejected`); `JSONFormatter` preserva `component` lógico; 7 alertas implementados no `notifier.py`; `mart_saude_pipeline` sincronizado; `.secrets.baseline` limpo (sem falsos positivos); `pip-audit` sem vulnerabilidades; branch protection documentada; instalação editável (`pip install -e .`) com 3 entry points (`hub-vagas-ingest`, `hub-vagas-transform`, `hub-vagas-scheduler`) |
 
 ---
 
@@ -485,6 +490,21 @@ Esta fase fortaleceu o projeto com cinco melhorias (M08 a M15):
 - `.github/dependabot.yml`: atualizações automatizadas semanais
 - `pip-audit` no CI: scan de vulnerabilidades em ambos os lockfiles
 - `requirements.lock` removido (redundante)
+
+### M14/M15 — Fase 3.3: CI/CD, Packaging e Segurança
+- Python padronizado em **3.11** (`requires-python = "==3.11.*"`) — lockfiles reproduzíveis
+- CI reorganizada: **7 jobs independentes** (deps, lint, test, integration, dbt-build, security, pip-audit)
+- Testes E2E: **7 cenários A–G** validados (sucesso, dados incompletos, duplicidade, fonte indisponível, banco indisponível, falha dbt, alteração estrutural)
+- Executor `infra/migrate.py` testado (**15 testes**: aplicação, idempotência, detecção de alteração, concorrência, recuperação)
+- Status do pipeline padronizados: **`SUCCESS` / `PARTIAL` / `FAILED`** (eliminados `SUCESSO`/`FALHADO`)
+- Contadores unificados: `records_inserted`/`records_updated`/`records_duplicated`/`records_rejected`
+- `JSONFormatter` preserva `component` lógico passado via `log_event()`
+- **7 alertas implementados** no `notifier.py` (fonte sem execução, falhas consecutivas, queda volume, desvio qualidade, persistência raw, dbt falha, dados desatualizados)
+- `mart_saude_pipeline` sincronizado com novos status (`SUCCESS`/`PARTIAL`/`FAILED`/`EMPTY`)
+- `.secrets.baseline` limpo — **0 segredos** (falsos positivos de CI removidos)
+- `pip-audit`: **nenhuma vulnerabilidade** em requirements.txt nem requirements-dev.txt
+- Branch protection documentada (`docs/operations/branch-protection.md`) com 7 checks obrigatórios
+- Instalação editável (`pip install -e .`) com **3 entry points**: `hub-vagas-ingest`, `hub-vagas-transform`, `hub-vagas-scheduler`
 
 ---
 

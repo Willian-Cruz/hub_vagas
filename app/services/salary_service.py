@@ -1,8 +1,7 @@
 import re
-from typing import Optional
 
-from scrapers.parser_utils import parse_salario
-from utils.text_utils import valor_ou_none
+from app.scrapers.parser_utils import parse_salario
+from app.utils.text_utils import valor_ou_none
 
 
 class SalaryService:
@@ -44,7 +43,7 @@ class SalaryService:
     )
 
     @classmethod
-    def extrair(cls, texto: Optional[str]) -> Optional[str]:
+    def extrair(cls, texto: str | None) -> str | None:
         """
         Extrai a faixa salarial de um texto.
 
@@ -82,7 +81,7 @@ class SalaryService:
     # ── Estruturação de salário (P4) ──────────────────────────────────
 
     @classmethod
-    def estruturar(cls, texto: Optional[str]) -> dict:
+    def estruturar(cls, texto: str | None) -> dict:
         """
         Decompõe o texto de salário em campos estruturados.
 

@@ -45,6 +45,7 @@ app/services/scheduler_service.py
 app/services/tech_service.py
 app/tests/__init__.py
 app/tests/conftest.py
+app/tests/test_advisory_lock.py
 app/tests/test_analytics_service.py
 app/tests/test_bronze_repository.py
 app/tests/test_catho_parser.py
@@ -70,6 +71,7 @@ app/tests/test_utils_e_relevancia.py
 app/tests/integration/__init__.py
 app/tests/integration/conftest.py
 app/tests/integration/test_e2e.py
+app/tests/integration/test_migrate_executor.py
 app/tests/integration/test_persistence.py
 app/utils/__init__.py
 app/utils/date_utils.py

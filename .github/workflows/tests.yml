@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout do codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Configurar Python 3.11
         uses: actions/setup-python@v5
@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout do codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Configurar Python 3.11
         uses: actions/setup-python@v5
@@ -71,7 +71,7 @@ jobs:
 
     steps:
       - name: Checkout do codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Configurar Python 3.11
         uses: actions/setup-python@v5
@@ -109,7 +109,7 @@ jobs:
 
     steps:
       - name: Checkout do codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Configurar Python 3.11
         uses: actions/setup-python@v5
@@ -161,7 +161,7 @@ jobs:
 
     steps:
       - name: Checkout do codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Configurar Python 3.11
         uses: actions/setup-python@v5
@@ -219,7 +219,7 @@ jobs:
 
     steps:
       - name: Checkout do codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Instalar detect-secrets
         run: pip install detect-secrets
@@ -236,7 +236,7 @@ jobs:
 
     steps:
       - name: Checkout do codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Configurar Python 3.11
         uses: actions/setup-python@v5

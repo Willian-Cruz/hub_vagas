@@ -9,11 +9,16 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy.engine import make_url
 
+from utils.logger import get_logger, log_event
+
+
+logger = get_logger(__name__)
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DBT_DIR = ROOT_DIR / "dbt"
@@ -78,6 +83,21 @@ def main(argv: list[str] | None = None) -> int:
     if not DBT_PROFILE.exists():
         shutil.copyfile(DBT_PROFILE_TEMPLATE, DBT_PROFILE)
 
+    run_id = os.getenv("RUN_ID", "manual")
+    subcomando = argumentos[0] if argumentos else "build"
+
+    log_event(
+        logger=logger,
+        level="INFO",
+        run_id=run_id,
+        component="dbt",
+        stage="transformacao",
+        event="dbt_started",
+        status="iniciado",
+        mensagem=f"dbt {subcomando} iniciado",
+    )
+
+    inicio_dbt = time.time()
     # --project-dir e --profiles-dir são opções do subcomando (dbt build ...),
     # não do dbt em si: antes do subcomando o dbt responde "No such option".
     comando = [
@@ -88,7 +108,36 @@ def main(argv: list[str] | None = None) -> int:
         "--profiles-dir",
         str(DBT_DIR),
     ]
-    return subprocess.run(comando, cwd=ROOT_DIR, check=False).returncode
+    resultado = subprocess.run(comando, cwd=ROOT_DIR, check=False)
+    duracao_dbt = round(time.time() - inicio_dbt, 2)
+    codigo_retorno = resultado.returncode
+
+    if codigo_retorno == 0:
+        log_event(
+            logger=logger,
+            level="INFO",
+            run_id=run_id,
+            component="dbt",
+            stage="transformacao",
+            event="dbt_completed",
+            status="sucesso",
+            duration_ms=round(duracao_dbt * 1000, 2),
+            mensagem=f"dbt {subcomando} concluído com sucesso em {duracao_dbt}s",
+        )
+    else:
+        log_event(
+            logger=logger,
+            level="ERROR",
+            run_id=run_id,
+            component="dbt",
+            stage="transformacao",
+            event="dbt_failed",
+            status="falha",
+            duration_ms=round(duracao_dbt * 1000, 2),
+            mensagem=f"dbt {subcomando} falhou com código {codigo_retorno} após {duracao_dbt}s",
+        )
+
+    return codigo_retorno
 
 
 if __name__ == "__main__":

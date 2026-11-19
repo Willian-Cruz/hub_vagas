@@ -1,7 +1,7 @@
 # Hub Vagas — Job Market Analytics
 
 [![CI Hub Vagas](https://github.com/Willian-Cruz/hub_vagas/actions/workflows/tests.yml/badge.svg)](https://github.com/Willian-Cruz/hub_vagas/actions/workflows/tests.yml)
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-SQLAlchemy-336791?logo=postgresql&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Coleta-Playwright-2EAD33?logo=playwright)
 ![dbt](https://img.shields.io/badge/Transforma%C3%A7%C3%A3o-dbt-FF694B?logo=dbt)
@@ -248,7 +248,7 @@ hub_vagas/
 
 ## Tecnologias identificadas nas descrições
 
-25 termos monitorados em `dbt/seeds/tecnologias_monitoradas.csv` (fonte única, compartilhada com o Python): Python, SQL, AWS, Azure, GCP, Spark, Airflow, Kafka, Docker, Kubernetes, PostgreSQL, MySQL, Oracle, MongoDB, Power BI, Tableau, Databricks, Snowflake, **dbt, BigQuery, Redshift, Excel, Git, Looker, Qlik**.
+25 termos monitorados em `dbt/seeds/tecnologias_monitoradas.csv` (fonte única, compartilhada com o Python): Python, SQL, AWS, Azure, GCP, Spark, Airflow, Kafka, Docker, Kubernetes, PostgreSQL, MySQL, Oracle, MongoDB, Power BI, Tableau, Databricks, Snowflake, **dbt, BigQuery, Redshift, Excel, Git, Looker, Qlik, plsql, r, javascript, terraform**.
 
 A extração é feita por regex no dbt sobre a seed; mudar o CSV e rodar `dbt seed` + `dbt build` muda o resultado.
 
@@ -420,7 +420,7 @@ O GitHub Actions roda, a cada push/PR na `main`:
 5. Detecção de secrets com detect-secrets
 6. Scan de vulnerabilidades com pip-audit
 
-**Última validação:** dbt build **PASS=181, WARN=6, ERROR=0, SKIP=0**; pytest **335 passed, 1 skipped** (testes de unidade + integração em PostgreSQL real 15); ruff warnings de estilo (cosméticos); pip-audit **sem vulnerabilidades**; detect-secrets **sem novos segredos** (baseline `.secrets.baseline`).
+**Última validação:** dbt build **PASS=184, WARN=3, ERROR=0, SKIP=0**; pytest **342 passed** (testes de unidade + integração em PostgreSQL real + 4 testes de advisory lock); ruff warnings de estilo (cosméticos); pip-audit **sem vulnerabilidades**; detect-secrets **sem novos segredos** (baseline `.secrets.baseline`).
 
 ---
 
@@ -446,7 +446,8 @@ O GitHub Actions roda, a cada push/PR na `main`:
 | 18 (nov/2026) | **Fase 3 — Operação, CI, segurança e compliance**: Windows Task Scheduler (XML + PowerShell); notificação de falha (webhook/e-mail); retry com backoff; advisory lock; `schema_migrations` + `migrate.py`; role `bi_reader` + `+grants` no dbt; `docs/compliance.md`; CI com `services: postgres`, pytest integration, ruff, pre-commit, pip-tools lock (`requirements.in`) |
 | 19 (nov/2026) | **Fase 4 — Refinamentos**: `detail_url` no `JobSchema`; `fetch_detail_page` / `_merge_detail_into_vaga` no `BaseScraper`; deep scraping para Vagas.com (descrição completa + salário); guia de expansão para portais (Remotar, Sólides, LinkedIn, Indeed, Glassdoor); `AnalyticsService` auditado e funcional (consulta Gold); `.env.example` limpo (sem Cloud Run/Cloud SQL/DASHBOARD_URL); `ARCHITECTURE.md` consolidado no README |
 | 20 (nov/2026) | **Fase 3 — Qualidade, Testes e Observabilidade**: contratos de dados documentados (`docs/data_dictionary/contracts.md`, `docs/data_dictionary/data_dictionary.md`); qualidade dbt reforçada (validação salario_min<=max, precisão/recall de tecnologias, severidade documentada); testes E2E e integração (ambiente PostgreSQL isolado, migrations automáticas, cenários A-G, CI com `services: postgres` e dbt build a cada push/PR); observabilidade (logs estruturados com `run_id`, `mart_saude_pipeline` consolidado, condições de alerta documentadas); dependências e segurança (requirements.in/requirements.txt separados, requirements-dev.in/requirements-dev.txt, Dependabot, pip-audit no CI, `.github/dependabot.yml`) |
-| 21 (nov/2026) | **Fase 3.1 — Estabilização, correção e validação integrada**: CI/CD consolidada (workflow único `tests.yml` com jobs: deps, lint, test, integration, dbt-build, security, pip-audit; `pip-compile` correto; baseline do detect-secrets); testes de integração e E2E em PostgreSQL real (12 cenários A–G); coluna física `link` em `raw.job_observations` (migração 010); validadores Pydantic (título/link/origem não vazios); advisory lock fail-closed; status de execução coerente (erros de persistência → FALHADO/PARTIAL); logs estruturados JSON com `log_event()`; migration 000 para banco limpo; contrato dbt atualizado com `link`; `pyproject.toml` `requires-python = ">=3.11"` |
+| 21 (nov/2026) | **Fase 3.1 — Estabilização, correção e validação integrada**: CI/CD consolidada (workflow único `tests.yml` com jobs: deps, lint, test, integration, dbt-build, security, pip-audit; `pip-compile` correto; baseline do detect-secrets); testes de integração e E2E em PostgreSQL real (7 cenários A–G); coluna física `link` em `raw.job_observations` (migração 010); validadores Pydantic (título/link/origem não vazios); advisory lock fail-closed; status de execução coerente (erros de persistência → FALHADO/PARTIAL); logs estruturados JSON com `log_event()`; migration 000 para banco limpo; contrato dbt atualizado com `link`; `pyproject.toml` `requires-python = ">=3.11"` |
+| 22 (nov/2026) | **Fase 3.2 — Estabilização do CI/CD, qualidade de dados e validação E2E**: migração 000 corrigida (bug `p.name[0:4].isdigit()` que falhava para `000_`); `dbt/sources.yml` criado (fontes `raw_observations` e `bronze`); macro `select_raw_jobs` corrigida para usar `source('raw_observations', 'job_observations')`; macro `monitored_technologies` sincronizada com a seed (30 tecnologias); Cenário A do E2E reescrito para fluxo completo Raw → Silver → Gold com 10 vagas (valida Silver `silver.jobs`, Gold `gold.mart_vagas` com tecnologias detectadas, e linhagem `run_id`/`ingested_at`/`scraper_version`); 4 testes de advisory lock (disponível, ocupado, liberação após falha, concorrência); `dbt build` em banco limpo com 184 PASS; `pip install -e .` funcional com `requires-python = ">=3.11"` |
 
 ---
 

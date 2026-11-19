@@ -119,23 +119,53 @@ class PipelineService:
         """
         Executa o pipeline de ingestão: coleta e persistência na raw layer `jobs`.
 
+        Semântica de estados (SUCCESS / PARTIAL / FAILED):
+
+        SUCCESS
+            Todas as etapas obrigatórias foram executadas com sucesso.
+            Condição: bronze gravado AND pelo menos uma fonte retornou dados
+                      AND todas as fontes tiveram status SUCCESS
+                      AND não houve erro de persistência que impeça continuidade.
+
+        PARTIAL
+            A execução foi concluída parcialmente. Exemplos:
+              - Uma fonte falhou, mas outras foram processadas.
+              - Algumas observações foram persistidas e outras rejeitadas.
+              - Uma etapa não crítica falhou, mas o resultado principal continua válido.
+              - Bronze gravado e pelo menos uma fonte trouxe dados, mas nem todas
+                as fontes tiveram sucesso.
+
+        FAILED
+            A execução não conseguiu concluir as etapas essenciais. Exemplos:
+              - Banco indisponível (advisory lock não pôde ser adquirido).
+              - Falha crítica de inicialização.
+              - Falha de persistência que impede continuidade (todas as vagas
+                deram erro de persistência e nenhuma foi persistida).
+              - Bronze funcionou, mas nenhuma fonte trouxe dados.
+              - Exceção não capturada durante a execução.
+
         Returns:
             dict com métricas da execução:
             {
                 "run_id":            str,   # UUID da execução
-                "coletadas":         int,   # vagas do tema retornadas pelos scrapers
-                "descartadas":       int,   # vagas fora do tema, descartadas na coleta
-                "raw_salvas":        int,   # vagas inseridas na tabela raw `jobs`
-                "raw_duplicadas":    int,   # vagas ignoradas por já existirem
-                "raw_erros":         int,   # vagas que falharam ao salvar
-                "bronze_ok":         bool,  # True se os ScrapeRuns foram gravados
-                "fontes":            list,  # status, contagem e erro por scraper
-                "fontes_sucesso":    int,   # fontes com status SUCCESS
-                "fontes_parcial":    int,   # fontes com status PARTIAL
-                "fontes_falha":      int,   # fontes com status FAILED
-                "fontes_vazio":      int,   # fontes com status EMPTY
-                "duracao_seg":       float, # tempo total em segundos
-                "sucesso":           bool,  # True se pelo menos uma fonte trouxe vagas
+                "status":            str,   # SUCCESS | PARTIAL | FAILED
+                "started_at":        str,   # ISO-8601 UTC do início
+                "finished_at":       str,   # ISO-8601 UTC do término
+                "duration_seconds":  float, # duração em segundos
+                "sources_total":     int,   # total de fontes consultadas
+                "sources_success":   int,   # fontes com status SUCCESS
+                "sources_failed":    int,   # fontes com status FAILED
+                "records_received":  int,   # total de vagas recebidas dos scrapers
+                "records_validated": int,   # vagas que passaram na validação de contrato
+                "records_inserted":  int,   # vagas novas inseridas na raw
+                "records_updated":   int,   # vagas revistas na raw
+                "records_duplicated":int,   # vagas duplicadas ignoradas
+                "records_rejected":  int,   # vagas rejeitadas (erro de persistência)
+                "raw_errors":        int,   # sinônimo de records_rejected
+                "dbt_status":        str,   # "nao_executado" (dbt é etapa separada)
+                "error_stage":       str,   # etapa onde ocorreu erro, se houver
+                "sucesso":           bool,  # True se status == SUCCESS
+                ...
             }
         """
         trave_conexao, trave_adquirida = PipelineService._adquirir_travar_execucao()
@@ -149,14 +179,31 @@ class PipelineService:
                 status="bloqueado",
                 mensagem="Outra instância do pipeline já está em execução (advisory lock). Abortando.",
             )
+            agora_utc = datetime.now(timezone.utc).isoformat()
             return {
                 "run_id": None,
-                "coletadas": 0,
-                "descartadas": 0,
+                "status": "FALHADO",
+                "started_at": agora_utc,
+                "finished_at": agora_utc,
+                "duration_seconds": 0.0,
+                "sources_total": 0,
+                "sources_success": 0,
+                "sources_failed": 0,
+                "records_received": 0,
+                "records_validated": 0,
+                "records_inserted": 0,
+                "records_updated": 0,
+                "records_duplicated": 0,
+                "records_rejected": 0,
+                "raw_errors": 0,
                 "raw_novas": 0,
                 "raw_revisadas": 0,
                 "raw_duplicadas": 0,
                 "raw_erros": 0,
+                "coletadas": 0,
+                "descartadas": 0,
+                "dbt_status": "nao_executado",
+                "error_stage": "advisory_lock",
                 "bronze_ok": False,
                 "fontes": [],
                 "fontes_sucesso": 0,
@@ -166,7 +213,6 @@ class PipelineService:
                 "duracao_seg": 0.0,
                 "sucesso": False,
                 "bloqueado_por_trava": True,
-                "status": "FALHADO",
             }
 
         logger.info("=" * 60)
@@ -175,28 +221,45 @@ class PipelineService:
 
         metricas = {
             "run_id": None,
-            "coletadas":      0,
-            "descartadas":    0,
-            "raw_novas":      0,
-            "raw_revisadas":  0,
+            "status": "FALHADO",
+            "started_at": None,
+            "finished_at": None,
+            "duration_seconds": 0.0,
+            "sources_total": 0,
+            "sources_success": 0,
+            "sources_failed": 0,
+            "records_received": 0,
+            "records_validated": 0,
+            "records_inserted": 0,
+            "records_updated": 0,
+            "records_duplicated": 0,
+            "records_rejected": 0,
+            "raw_errors": 0,
+            "raw_novas": 0,
+            "raw_revisadas": 0,
             "raw_duplicadas": 0,
-            "raw_erros":      0,
-            "bronze_ok":      False,
-            "fontes":         [],
+            "raw_erros": 0,
+            "dbt_status": "nao_executado",
+            "error_stage": None,
+            "bronze_ok": False,
+            "fontes": [],
             "fontes_sucesso": 0,
             "fontes_parcial": 0,
-            "fontes_falha":   0,
-            "fontes_vazio":   0,
-            "duracao_seg":    0.0,
-            "sucesso":        False,
+            "fontes_falha": 0,
+            "fontes_vazio": 0,
+            "coletadas": 0,
+            "descartadas": 0,
+            "duracao_seg": 0.0,
+            "sucesso": False,
             "bloqueado_por_trava": False,
-            "status":         "FALHADO",
         }
 
         inicio = time.time()
         inicio_utc = datetime.now(timezone.utc)
         run_id = uuid4()
         metricas["run_id"] = str(run_id)
+        metricas["started_at"] = inicio_utc.isoformat()
+        error_stage = None
 
         log_event(
             logger=logger,
@@ -204,7 +267,7 @@ class PipelineService:
             run_id=str(run_id),
             component="pipeline",
             stage="inicio",
-            event="pipeline_iniciado",
+            event="pipeline_started",
             status="iniciado",
             mensagem="PIPELINE DE INGESTÃO INICIADO",
         )
@@ -217,7 +280,7 @@ class PipelineService:
                 run_id=str(run_id),
                 component="pipeline",
                 stage="coleta",
-                event="etapa_iniciada",
+                event="persistence_started",
                 status="iniciado",
                 mensagem="Etapa 1/3: Coletando vagas...",
             )
@@ -235,14 +298,16 @@ class PipelineService:
             ]
             vagas = [vaga for resultado in resultados for vaga in resultado.jobs]
             metricas["coletadas"] = len(vagas)
+            metricas["records_received"] = len(vagas)
             metricas["descartadas"] = sum(resultado.discarded for resultado in resultados)
+            metricas["sources_total"] = len(resultados)
             log_event(
                 logger=logger,
                 level="INFO",
                 run_id=str(run_id),
                 component="pipeline",
                 stage="coleta",
-                event="vagas_coletadas",
+                event="source_completed",
                 status="sucesso",
                 records_received=len(vagas),
                 records_rejected=metricas["descartadas"],
@@ -261,7 +326,7 @@ class PipelineService:
                     component="scraper",
                     source=resultado.source,
                     stage="coleta",
-                    event="fonte_resultado",
+                    event="source_completed",
                     status=resultado.status.value,
                     records_received=len(resultado.jobs),
                     mensagem=f"Fonte {resultado.source}: {resultado.status.value} | Vagas: {len(resultado.jobs)} | Páginas: {resultado.pages_processed}",
@@ -274,7 +339,7 @@ class PipelineService:
                         component="scraper",
                         source=resultado.source,
                         stage="coleta",
-                        event="fonte_erro",
+                        event="source_failed",
                         status="erro",
                         error_message=resultado.error,
                     )
@@ -289,8 +354,10 @@ class PipelineService:
                     fontes_vazio.append(resultado)
 
             metricas["fontes_sucesso"] = len(fontes_sucesso)
+            metricas["sources_success"] = len(fontes_sucesso)
             metricas["fontes_parcial"] = len(fontes_parcial)
             metricas["fontes_falha"] = len(fontes_falha)
+            metricas["sources_failed"] = len(fontes_falha)
             metricas["fontes_vazio"] = len(fontes_vazio)
 
             # ── 2. Raw layer: salvar na tabela `jobs` ────────────────────
@@ -300,7 +367,7 @@ class PipelineService:
                 run_id=str(run_id),
                 component="pipeline",
                 stage="persistencia",
-                event="etapa_iniciada",
+                event="persistence_started",
                 status="iniciado",
                 mensagem="Etapa 2/3: Gravando vagas na raw layer `jobs`...",
             )
@@ -311,19 +378,24 @@ class PipelineService:
                     )
                     if resultado_salvamento == SALVA:
                         metricas["raw_novas"] += 1
+                        metricas["records_inserted"] += 1
                     elif resultado_salvamento == REVISADA:
                         metricas["raw_revisadas"] += 1
+                        metricas["records_updated"] += 1
                     elif resultado_salvamento == DUPLICADA:
                         metricas["raw_duplicadas"] += 1
+                        metricas["records_duplicated"] += 1
                     else:
                         metricas["raw_erros"] += 1
+                        metricas["raw_errors"] += 1
+                        metricas["records_rejected"] += 1
                 log_event(
                     logger=logger,
                     level="INFO",
                     run_id=str(run_id),
                     component="repository",
                     stage="persistencia",
-                    event="raw_concluida",
+                    event="persistence_completed",
                     status="sucesso",
                     records_received=metricas["raw_novas"],
                     records_persisted=metricas["raw_novas"],
@@ -332,13 +404,14 @@ class PipelineService:
                     mensagem=f"Raw concluída — {metricas['raw_novas']} novas, {metricas['raw_revisadas']} revistas, {metricas['raw_duplicadas']} duplicadas, {metricas['raw_erros']} erros",
                 )
             except Exception:
+                error_stage = "persistencia"
                 log_event(
                     logger=logger,
                     level="ERROR",
                     run_id=str(run_id),
                     component="repository",
                     stage="persistencia",
-                    event="raw_falha",
+                    event="persistence_failed",
                     status="falha",
                     mensagem="Falha ao persistir na raw layer `jobs`",
                 )
@@ -350,7 +423,7 @@ class PipelineService:
                 run_id=str(run_id),
                 component="pipeline",
                 stage="bronze",
-                event="etapa_iniciada",
+                event="persistence_started",
                 status="iniciado",
                 mensagem="Etapa 3/3: Gravando status de execução no Bronze...",
             )
@@ -370,22 +443,26 @@ class PipelineService:
                     run_id=str(run_id),
                     component="repository",
                     stage="bronze",
-                    event="bronze_concluida",
+                    event="persistence_completed",
                     status="sucesso",
                     records_persisted=metricas_bronze,
                     mensagem=f"Bronze concluída — {metricas_bronze} scrape_run(s) registrado(s)",
                 )
             except Exception:
+                error_stage = "bronze"
                 log_event(
                     logger=logger,
                     level="ERROR",
                     run_id=str(run_id),
                     component="repository",
                     stage="bronze",
-                    event="bronze_falha",
+                    event="persistence_failed",
                     status="falha",
                     mensagem="Falha ao persistir status no Bronze",
                 )
+
+            # Validação de contrato: quantas vagas passaram na validação do Pydantic
+            metricas["records_validated"] = metricas["records_inserted"] + metricas["records_updated"]
 
             # Sucesso parcial ou total = Bronze gravado e pelo menos uma fonte
             # retornou dados (SUCESSO ou PARTIAL com vagas).
@@ -415,6 +492,9 @@ class PipelineService:
                 # Bronze nao funcionou (erro de persistência)
                 metricas["sucesso"] = False
                 metricas["status"] = "FALHADO"
+
+            if error_stage:
+                metricas["error_stage"] = error_stage
 
             if metricas["fontes_falha"] > 0:
                 log_event(
@@ -466,6 +546,8 @@ class PipelineService:
                     )
 
         except Exception as e:
+            error_stage = error_stage or "geral"
+            metricas["error_stage"] = error_stage
             log_event(
                 logger=logger,
                 level="ERROR",
@@ -479,11 +561,16 @@ class PipelineService:
                 mensagem=f"Erro crítico no pipeline: {e}",
             )
             metricas["sucesso"] = False
+            metricas["status"] = "FALHADO"
             enviar_falha(metricas, erro=str(e))
 
         finally:
             PipelineService._liberar_travar_execucao(trave_conexao)
-            metricas["duracao_seg"] = round(time.time() - inicio, 2)
+            fim = time.time()
+            fim_utc = datetime.now(timezone.utc).isoformat()
+            metricas["finished_at"] = fim_utc
+            metricas["duracao_seg"] = round(fim - inicio, 2)
+            metricas["duration_seconds"] = metricas["duracao_seg"]
             status_final = metricas["status"]
             log_event(
                 logger=logger,
@@ -491,7 +578,7 @@ class PipelineService:
                 run_id=str(run_id),
                 component="pipeline",
                 stage="finalizacao",
-                event="pipeline_finalizado",
+                event="pipeline_completed",
                 status=status_final.lower(),
                 duration_ms=round(metricas["duracao_seg"] * 1000, 2),
                 records_received=metricas["coletadas"],

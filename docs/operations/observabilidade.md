@@ -46,7 +46,7 @@ log_event(
     source="Vagas.com",
     component="scraper",
     stage="coleta",
-    event="vagas_coletadas",
+    event="source_completed",
     status="sucesso",
     duration_ms=1250,
     records_received=28,
@@ -67,27 +67,31 @@ O `PipelineService.executar()` retorna um dicionário com métricas completas:
 |---------|-----------|
 | `run_id` | UUID da execução |
 | `status` | SUCESSO, PARCIAL ou FALHADO |
-| `coletadas` | Total de vagas coletadas por todos os scrapers |
-| `descartadas` | Vagas fora do tema (filtro de relevância) |
-| `raw_novas` | Novas observações inseridas na raw |
-| `raw_revisadas` | Observações atualizadas (payload diferente) |
-| `raw_duplicadas` | Observações ignoradas (mesmo payload) |
-| `raw_erros` | Erros de persistência na raw |
+| `started_at` | ISO-8601 UTC do início |
+| `finished_at` | ISO-8601 UTC do término |
+| `duration_seconds` | Duração em segundos |
+| `sources_total` | Total de fontes consultadas |
+| `sources_success` | Fontes com status SUCCESS |
+| `sources_failed` | Fontes com status FAILED |
+| `records_received` | Total de vagas recebidas dos scrapers |
+| `records_validated` | Vagas que passaram na validação de contrato |
+| `records_inserted` | Vagas novas inseridas na raw |
+| `records_updated` | Vagas revistas na raw |
+| `records_duplicated` | Vagas duplicadas ignoradas |
+| `records_rejected` | Vagas rejeitadas (erro de persistência) |
+| `raw_errors` | Erros de persistência na raw |
+| `dbt_status` | `"nao_executado"` (dbt é etapa separada) |
+| `error_stage` | Etapa onde ocorreu erro, se houver |
 | `bronze_ok` | Se o bronze.scrape_runs foi gravado |
 | `fontes_sucesso` | Fontes com status SUCCESS |
 | `fontes_parcial` | Fontes com status PARTIAL |
 | `fontes_falha` | Fontes com status FAILED |
 | `fontes_vazio` | Fontes com status EMPTY |
-| `duracao_seg` | Duração total da execução |
+| `descartadas` | Vagas fora do tema (filtro de relevância) |
+| `duracao_seg` | Duração total da execução (em segundos) |
 | `bloqueado_por_trava` | Se foi bloqueado pelo advisory lock |
-
-### Status de execução
-
-| Status | Significado |
-|--------|-------------|
-| `SUCESSO` | Todas as etapas obrigatórias concluídas, pelo menos uma fonte trouxe dados |
-| `PARCIAL` | Parte do processamento concluída, algumas fontes falharam mas pelo menos uma trouxe dados |
-| `FALHADO` | Nenhuma fonte trouxe dados ou erro de persistência |
+| `sucesso` | True se status == SUCCESS |
+| `bloqueado_por_trava` | Se foi bloqueado pelo advisory lock |
 
 ---
 

@@ -65,10 +65,32 @@ def test_pipeline_persiste_vagas_parciais_como_sucesso(monkeypatch):
     metricas = PipelineService.executar()
 
     assert metricas["sucesso"] is True  # PARTIAL com vagas = sucesso
+    assert metricas["status"] == "PARTIAL"  # mas não é SUCESSO total
     assert metricas["coletadas"] == 1
     assert metricas["raw_novas"] == 1
     assert metricas["bronze_ok"] is True
     assert metricas["fontes_parcial"] == 1
+    assert metricas["fontes_falha"] == 0
+
+
+def test_pipeline_todas_fontes_sucesso_marca_execucao_como_sucesso(monkeypatch):
+    """Quando todas as fontes têm SUCCESS, o status é SUCESSO."""
+    resultado = ScrapeResult(
+        source="Vagas.com",
+        status=ScrapeStatus.SUCCESS,
+        jobs=[_vaga()],
+        pages_processed=1,
+    )
+    monkeypatch.setattr(CollectorService, "coletar_resultados", lambda: [resultado])
+    _mock_persistence(monkeypatch)
+
+    metricas = PipelineService.executar()
+
+    assert metricas["sucesso"] is True
+    assert metricas["status"] == "SUCESSO"
+    assert metricas["coletadas"] == 1
+    assert metricas["raw_novas"] == 1
+    assert metricas["fontes_sucesso"] == 1
     assert metricas["fontes_falha"] == 0
 
 

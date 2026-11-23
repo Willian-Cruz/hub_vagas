@@ -6,7 +6,7 @@
 #
 aenum==3.1.17
     # via dbt-state
-agate==1.9.1
+agate==1.14.2
     # via
     #   dbt-adapters
     #   dbt-common
@@ -55,7 +55,7 @@ dbt-common==1.39.0
     #   dbt-adapters
     #   dbt-core
     #   dbt-postgres
-dbt-core==1.13.0b1
+dbt-core==2.0.0rc10
     # via
     #   dbt-postgres
     #   dbt-state
@@ -70,9 +70,9 @@ dbt-protos==1.0.615
     #   dbt-adapters
     #   dbt-common
     #   dbt-core
-dbt-state==2.64.5
+dbt-state==2.65.0
     # via dbt-core
-deepdiff==8.6.2
+deepdiff==9.2.1
     # via dbt-common
 et-xmlfile==2.0.0
     # via openpyxl
@@ -114,7 +114,7 @@ markdown-it-py==4.3.0
     # via rich
 markupsafe==3.0.4
     # via jinja2
-mashumaro[msgpack]==3.17
+mashumaro[msgpack]==3.23
     # via
     #   dbt-adapters
     #   dbt-common
@@ -123,7 +123,7 @@ mdurl==0.1.2
     # via markdown-it-py
 metricflow==0.214.0
     # via dbt-core
-more-itertools==10.8.0
+more-itertools==11.2.1
     # via metricflow
 msgpack==1.2.4
     # via mashumaro
@@ -147,13 +147,13 @@ pandas==3.1.1
     # via -r requirements.in
 parsedatetime==2.6
     # via agate
-pathspec==1.0.4
+pathspec==1.1.1
     # via
     #   dbt-common
     #   dbt-core
 playwright==1.65.2
     # via -r requirements.in
-protobuf==6.33.6
+protobuf==7.36.2
     # via
     #   dbt-adapters
     #   dbt-common
@@ -169,16 +169,16 @@ psycopg2-binary==2.9.13
     # via dbt-postgres
 pycparser==3.12
     # via cffi
-pydantic==2.14.3
+pydantic==2.14.4
     # via
     #   -r requirements.in
     #   dbt-core
     #   metricflow
-pydantic-core==2.50.4
+pydantic-core==2.50.5
     # via pydantic
 pygments==2.21.0
     # via rich
-python-dateutil==2.9.0.post0
+python-dateutil==4.0.0
     # via
     #   dbt-common
     #   metricflow
@@ -202,9 +202,9 @@ pyyaml==6.0.3
     #   dbt-core
     #   dbt-state
     #   metricflow
-query-cache-common==2.9.0
+query-cache-common==2.10.0
     # via dbt-state
-query-cache-protobuf==2.9.0
+query-cache-protobuf==2.10.0
     # via
     #   dbt-state
     #   query-cache-common
